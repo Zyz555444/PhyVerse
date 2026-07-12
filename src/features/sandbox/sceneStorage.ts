@@ -1,4 +1,4 @@
-import type { SandboxItem, SandboxScene, SandboxShape } from './sandboxStore'
+import type { SandboxItem, SandboxScene, SandboxShape, SandboxJoint } from './sandboxStore'
 
 const STORAGE_KEY = 'phyverse-sandbox-scene'
 const CURRENT_VERSION = 1
@@ -14,6 +14,8 @@ const SANDBOX_SHAPES: SandboxShape[] = [
   'spring',
 ]
 
+const JOINT_TYPES = ['spring', 'fixed', 'rope'] as const
+
 export interface VersionedScene extends SandboxScene {
   version: number
 }
@@ -23,7 +25,7 @@ export interface ImportSceneResult {
 }
 
 export interface ImportSceneError {
-  reason: 'parse' | 'structure' | 'shape' | 'item' | 'version'
+  reason: 'parse' | 'structure' | 'shape' | 'item' | 'version' | 'versionTooNew'
   message: string
 }
 
@@ -66,6 +68,19 @@ function isSandboxItem(value: unknown): value is SandboxItem {
   return true
 }
 
+function isSandboxJoint(value: unknown): value is SandboxJoint {
+  if (!value || typeof value !== 'object') return false
+  const j = value as Partial<SandboxJoint>
+  if (typeof j.id !== 'string' || j.id.length === 0) return false
+  if (typeof j.type !== 'string' || !JOINT_TYPES.includes(j.type as (typeof JOINT_TYPES)[number]))
+    return false
+  if (typeof j.bodyA !== 'string' || j.bodyA.length === 0) return false
+  if (typeof j.bodyB !== 'string' || j.bodyB.length === 0) return false
+  if (j.anchorA !== undefined && !isTuple3(j.anchorA)) return false
+  if (j.anchorB !== undefined && !isTuple3(j.anchorB)) return false
+  return true
+}
+
 export function isSandboxScene(value: unknown): value is SandboxScene {
   if (!value || typeof value !== 'object') return false
   const scene = value as Partial<SandboxScene>
@@ -73,6 +88,11 @@ export function isSandboxScene(value: unknown): value is SandboxScene {
   if (!isTuple3(scene.gravity)) return false
   if (!Array.isArray(scene.items)) return false
   if (!scene.items.every((item) => isSandboxItem(item))) return false
+  if (
+    scene.joints !== undefined &&
+    (!Array.isArray(scene.joints) || !scene.joints.every((j) => isSandboxJoint(j)))
+  )
+    return false
 
   return true
 }
@@ -161,6 +181,19 @@ export async function importScene(file: File): Promise<SandboxScene> {
 
   const scene = migrateScene(parsed)
   if (!scene) {
+    // Check if it was a version error
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'version' in parsed &&
+      typeof (parsed as { version: number }).version === 'number' &&
+      (parsed as { version: number }).version > CURRENT_VERSION
+    ) {
+      throw createImportError(
+        'versionTooNew',
+        `场景文件版本(${(parsed as { version: number }).version})高于当前支持版本(${CURRENT_VERSION})，请升级 PhyVerse 后重新导入`
+      )
+    }
     throw createImportError('structure', '场景文件格式不正确')
   }
 

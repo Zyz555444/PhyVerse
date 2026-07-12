@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Trash2, Copy, RotateCcw } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Slider } from '@/shared/ui/Slider'
@@ -21,7 +21,6 @@ export function PropertiesPanel() {
   const removeItem = useSandboxStore((s) => s.removeItem)
   const duplicateItem = useSandboxStore((s) => s.duplicateItem)
   const setGravity = useSandboxStore((s) => s.setGravity)
-  const commitHistory = useSandboxStore((s) => s.commitHistory)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
 
   const selectedItem = useMemo(
@@ -36,11 +35,9 @@ export function PropertiesPanel() {
       </h3>
 
       <GravityEditor
-        key={gravity.join(',')}
         gravity={gravity}
         onCommit={(g) => {
           setGravity(g)
-          commitHistory()
         }}
       />
 
@@ -165,6 +162,8 @@ interface GravityEditorProps {
 function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
   const { t } = useI18n()
   const [values, setValues] = useState<[number, number, number]>(gravity)
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialRef = useRef(gravity)
 
   const updateAxis = (idx: number, value: number) => {
     setValues((prev) => {
@@ -174,13 +173,27 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
     })
   }
 
+  const debouncedCommit = (newValues: [number, number, number]) => {
+    if (commitTimerRef.current) clearTimeout(commitTimerRef.current)
+    commitTimerRef.current = setTimeout(() => {
+      const init = initialRef.current
+      if (init[0] !== newValues[0] || init[1] !== newValues[1] || init[2] !== newValues[2]) {
+        onCommit(newValues)
+      }
+    }, 300)
+  }
+
   return (
     <section className="mb-5">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-medium text-text-secondary">{t('sandbox.gravity')}</h4>
         <button
           type="button"
-          onClick={() => onCommit([0, -9.81, 0])}
+          onClick={() => {
+            const defaultG: [number, number, number] = [0, -9.81, 0]
+            setValues(defaultG)
+            onCommit(defaultG)
+          }}
           className="flex items-center gap-1 text-[10px] text-text-tertiary hover:text-accent"
           title={t('sandbox.resetGravity')}
         >
@@ -196,7 +209,7 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
           max={20}
           step={0.1}
           onChange={(v) => updateAxis(0, v)}
-          onCommit={() => onCommit(values)}
+          onCommit={() => debouncedCommit(values)}
           unit="m/s²"
         />
         <VectorSlider
@@ -206,7 +219,7 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
           max={20}
           step={0.1}
           onChange={(v) => updateAxis(1, v)}
-          onCommit={() => onCommit(values)}
+          onCommit={() => debouncedCommit(values)}
           unit="m/s²"
         />
         <VectorSlider
@@ -216,7 +229,7 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
           max={20}
           step={0.1}
           onChange={(v) => updateAxis(2, v)}
-          onCommit={() => onCommit(values)}
+          onCommit={() => debouncedCommit(values)}
           unit="m/s²"
         />
       </div>

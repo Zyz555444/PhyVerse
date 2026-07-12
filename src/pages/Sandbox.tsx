@@ -12,6 +12,7 @@ import {
 import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
 import { SandboxItemRenderer } from '@/features/sandbox/SandboxItemRenderer'
+import { SandboxJoints } from '@/features/sandbox/SandboxJoints'
 import { useSandboxShortcuts } from '@/features/sandbox/useSandboxShortcuts'
 import {
   saveScene,
@@ -42,8 +43,10 @@ const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
 export function Sandbox() {
   const { t } = useI18n()
   const items = useSandboxStore((s) => s.items)
+  const joints = useSandboxStore((s) => s.joints)
   const gravity = useSandboxStore((s) => s.gravity)
   const selectedId = useSandboxStore((s) => s.selectedId)
+  const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const selectItem = useSandboxStore((s) => s.selectItem)
   const updateItem = useSandboxStore((s) => s.updateItem)
@@ -62,6 +65,7 @@ export function Sandbox() {
   const [isRunning, setIsRunning] = useState(true)
   const [saved, setSaved] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
+  const [cameraResetKey, setCameraResetKey] = useState(0)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -147,7 +151,11 @@ export function Sandbox() {
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-heading text-3xl text-text-primary">{t('nav.sandbox')}</h1>
-          <p className="mt-2 text-text-secondary">{t('app.tagline')}</p>
+          <p className="mt-2 text-text-secondary">
+            {items.length > 0
+              ? `${t('sandbox.bodyCount', { count: items.length, joints: joints.length })}`
+              : t('app.tagline')}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -271,6 +279,15 @@ export function Sandbox() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => setCameraResetKey((k) => k + 1)}
+            title={t('sandbox.cameraReset')}
+            leftIcon={<Camera className="h-3.5 w-3.5" />}
+          >
+            {t('sandbox.cameraReset')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={handleExport}
             leftIcon={<Download className="h-3.5 w-3.5" />}
           >
@@ -304,25 +321,38 @@ export function Sandbox() {
           className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
           data-sandbox-canvas
         >
-          <Scene cameraPosition={[8, 6, 8]} cameraView={editorConfig.cameraView} showGrid>
+          <Scene
+            cameraPosition={[8, 6, 8]}
+            cameraView={editorConfig.cameraView}
+            cameraResetKey={cameraResetKey}
+            showGrid
+          >
             <PhysicsProvider
               config={{ gravity }}
               autoStep={isRunning}
               timeScale={editorConfig.timeScale}
             >
               <LabTable position={[0, 0, 0]} size={[6, 4]} height={0.8} />
+              <SandboxJoints />
               {items.map((item) => (
                 <SandboxItemRenderer
                   key={item.id}
                   item={item}
                   selected={item.id === selectedId}
+                  multiSelected={multiSelectedIds.includes(item.id)}
                   editingEnabled={!isRunning}
                   gizmoMode={gizmoMode}
                   snapEnabled={editorConfig.snapEnabled}
                   snapSize={editorConfig.snapSize}
                   angleSnapEnabled={editorConfig.angleSnapEnabled}
                   angleSnapSize={editorConfig.angleSnapSize}
-                  onClick={() => selectItem(item.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    selectItem(
+                      item.id,
+                      (e.nativeEvent as MouseEvent).ctrlKey || (e.nativeEvent as MouseEvent).metaKey
+                    )
+                  }}
                   onChange={(patch) => updateItem(item.id, patch)}
                   onCommit={(patch) => {
                     updateItem(item.id, patch)
@@ -354,9 +384,12 @@ export function Sandbox() {
           )}
 
           {items.length === 0 && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
               <p className="rounded-lg border border-border bg-paper/90 px-4 py-2 text-sm text-text-tertiary shadow-sm">
                 {t('sandbox.empty')}
+              </p>
+              <p className="rounded-lg border border-border bg-paper/80 px-4 py-2 text-xs text-text-tertiary/70 shadow-sm max-w-md text-center">
+                {t('sandbox.shortcuts')}
               </p>
             </div>
           )}

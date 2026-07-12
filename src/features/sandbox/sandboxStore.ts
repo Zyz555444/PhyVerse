@@ -7,6 +7,21 @@ export type SandboxShape =
 export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
 
+export type JointType = 'spring' | 'fixed' | 'rope'
+
+export interface SandboxJoint {
+  id: string
+  type: JointType
+  bodyA: string
+  bodyB: string
+  anchorA?: [number, number, number]
+  anchorB?: [number, number, number]
+  restLength?: number
+  stiffness?: number
+  damping?: number
+  maxDistance?: number
+}
+
 export interface SandboxItem {
   id: string
   shape: SandboxShape
@@ -25,6 +40,7 @@ export interface SandboxItem {
 export interface SandboxScene {
   gravity: [number, number, number]
   items: SandboxItem[]
+  joints?: SandboxJoint[]
 }
 
 export interface SandboxEditorConfig {
@@ -44,13 +60,15 @@ interface HistoryState {
 
 interface SandboxState extends SandboxScene {
   selectedId: string | null
+  multiSelectedIds: string[]
   history: HistoryState
   editorConfig: SandboxEditorConfig
-  clipboard: SandboxItem | null
+  clipboard: SandboxItem[] | null
+  joints: SandboxJoint[]
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
-  selectItem: (id: string | null) => void
+  selectItem: (id: string | null, multi?: boolean) => void
   updateItem: (id: string, patch: Partial<SandboxItem>) => void
   updateItemAndCommit: (id: string, patch: Partial<SandboxItem>) => void
   commitHistory: () => void
@@ -110,11 +128,12 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
 function createDefaultItem(shape: SandboxShape, position?: [number, number, number]): SandboxItem {
   const offsetX = (Math.random() - 0.5) * 2
   const offsetZ = (Math.random() - 0.5) * 2
+  const isPlane = shape === 'plane'
   return {
     id: generateId(),
     shape,
-    position: position ?? [offsetX, 3, offsetZ],
-    rotation: [0, 0, 0],
+    position: position ?? (isPlane ? [0, 0, 0] : [offsetX, 3, offsetZ]),
+    rotation: isPlane ? [-Math.PI / 2, 0, 0] : [0, 0, 0],
     scale: [1, 1, 1],
     size: DEFAULT_SIZES[shape],
     material: shape === 'plane' ? 'wood' : 'plastic',
@@ -126,13 +145,15 @@ function createDefaultItem(shape: SandboxShape, position?: [number, number, numb
   }
 }
 
-function snapshot(state: Pick<SandboxState, 'items' | 'gravity'>): SandboxScene {
-  return { items: state.items, gravity: state.gravity }
+function snapshot(state: Pick<SandboxState, 'items' | 'gravity' | 'joints'>): SandboxScene {
+  return { items: state.items, gravity: state.gravity, joints: state.joints }
 }
 
 const HISTORY_LIMIT = 50
 
-function pushHistory(state: Pick<SandboxState, 'items' | 'gravity' | 'history'>): HistoryState {
+function pushHistory(
+  state: Pick<SandboxState, 'items' | 'gravity' | 'joints' | 'history'>
+): HistoryState {
   return {
     past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
     future: [],
@@ -140,7 +161,7 @@ function pushHistory(state: Pick<SandboxState, 'items' | 'gravity' | 'history'>)
 }
 
 function commitHistoryState(
-  state: Pick<SandboxState, 'items' | 'gravity' | 'history'>
+  state: Pick<SandboxState, 'items' | 'gravity' | 'joints' | 'history'>
 ): HistoryState {
   return {
     past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
@@ -150,7 +171,9 @@ function commitHistoryState(
 
 export const useSandboxStore = create<SandboxState>((set) => ({
   items: [],
+  joints: [],
   selectedId: null,
+  multiSelectedIds: [],
   gravity: DEFAULT_GRAVITY,
   history: { past: [], future: [] },
   editorConfig: DEFAULT_EDITOR_CONFIG,
@@ -167,13 +190,32 @@ export const useSandboxStore = create<SandboxState>((set) => ({
     }),
 
   removeItem: (id) =>
-    set((state) => ({
-      items: state.items.filter((item) => item.id !== id),
-      selectedId: state.selectedId === id ? null : state.selectedId,
-      history: pushHistory(state),
-    })),
+    set((state) => {
+      const idsToRemove = state.multiSelectedIds.length > 0 ? [id, ...state.multiSelectedIds] : [id]
+      const removeSet = new Set(idsToRemove)
+      return {
+        items: state.items.filter((item) => !removeSet.has(item.id)),
+        joints: state.joints.filter((j) => !removeSet.has(j.bodyA) && !removeSet.has(j.bodyB)),
+        selectedId: null,
+        multiSelectedIds: [],
+        history: pushHistory(state),
+      }
+    }),
 
-  selectItem: (id) => set({ selectedId: id }),
+  selectItem: (id, multi) =>
+    set((state) => {
+      if (id === null) return { selectedId: null, multiSelectedIds: [] }
+      if (multi && state.selectedId) {
+        const existing = state.multiSelectedIds.includes(id)
+          ? state.multiSelectedIds.filter((mid) => mid !== id)
+          : [...state.multiSelectedIds, id]
+        if (!existing.includes(state.selectedId)) {
+          existing.push(state.selectedId)
+        }
+        return { multiSelectedIds: existing }
+      }
+      return { selectedId: id, multiSelectedIds: [] }
+    }),
 
   updateItem: (id, patch) =>
     set((state) => {
@@ -203,54 +245,71 @@ export const useSandboxStore = create<SandboxState>((set) => ({
 
   duplicateItem: (id) =>
     set((state) => {
-      const source = state.items.find((item) => item.id === id)
-      if (!source) return state
-      const newItem: SandboxItem = {
+      const idsToDup = state.multiSelectedIds.length > 0 ? [id, ...state.multiSelectedIds] : [id]
+      const dupSet = new Set(idsToDup)
+      const sources = state.items.filter((item) => dupSet.has(item.id))
+      if (sources.length === 0) return state
+      const newItems: SandboxItem[] = sources.map((source) => ({
         ...source,
         id: generateId(),
-        position: [source.position[0] + 0.5, source.position[1], source.position[2] + 0.5],
-      }
+        position: [source.position[0] + 0.5, source.position[1], source.position[2] + 0.5] as [
+          number,
+          number,
+          number,
+        ],
+      }))
       return {
-        items: [...state.items, newItem],
-        selectedId: newItem.id,
+        items: [...state.items, ...newItems],
+        selectedId: newItems[0].id,
+        multiSelectedIds: newItems.slice(1).map((p) => p.id),
         history: pushHistory(state),
       }
     }),
 
   copyItem: (id) =>
     set((state) => {
-      const source = state.items.find((item) => item.id === id)
-      return { clipboard: source ? { ...source } : null }
+      const idsToCopy =
+        state.multiSelectedIds.length > 0
+          ? ([state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[])
+          : [id]
+      const items = idsToCopy
+        .map((iid) => state.items.find((item) => item.id === iid))
+        .filter(Boolean) as SandboxItem[]
+      return { clipboard: items.length > 0 ? items : null }
     }),
 
   pasteItem: () =>
     set((state) => {
-      if (!state.clipboard) return state
-      const pasted: SandboxItem = {
-        ...state.clipboard,
+      if (!state.clipboard || state.clipboard.length === 0) return state
+      const pastedItems: SandboxItem[] = state.clipboard.map((item) => ({
+        ...item,
         id: generateId(),
-        position: [
-          state.clipboard.position[0] + 0.5,
-          state.clipboard.position[1],
-          state.clipboard.position[2] + 0.5,
+        position: [item.position[0] + 0.5, item.position[1], item.position[2] + 0.5] as [
+          number,
+          number,
+          number,
         ],
-      }
+      }))
       return {
-        items: [...state.items, pasted],
-        selectedId: pasted.id,
+        items: [...state.items, ...pastedItems],
+        selectedId: pastedItems[0].id,
+        multiSelectedIds: pastedItems.slice(1).map((p) => p.id),
         history: pushHistory(state),
       }
     }),
 
   setGravity: (gravity) =>
-    set(() => ({
+    set((state) => ({
       gravity,
+      history: pushHistory(state),
     })),
 
   resetScene: () =>
     set((state) => ({
       items: [],
+      joints: [],
       selectedId: null,
+      multiSelectedIds: [],
       gravity: DEFAULT_GRAVITY,
       history: pushHistory(state),
     })),
@@ -258,15 +317,19 @@ export const useSandboxStore = create<SandboxState>((set) => ({
   clearScene: () =>
     set((state) => ({
       items: [],
+      joints: [],
       selectedId: null,
+      multiSelectedIds: [],
       history: pushHistory(state),
     })),
 
   loadScene: (scene) =>
     set((state) => ({
       items: scene.items,
+      joints: scene.joints ?? [],
       gravity: scene.gravity,
       selectedId: null,
+      multiSelectedIds: [],
       history: {
         past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
         future: [],
@@ -280,8 +343,10 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       const newPast = state.history.past.slice(0, -1)
       return {
         items: previous.items,
+        joints: previous.joints ?? [],
         gravity: previous.gravity,
         selectedId: null,
+        multiSelectedIds: [],
         history: {
           past: newPast,
           future: [snapshot(state), ...state.history.future].slice(-HISTORY_LIMIT),
@@ -295,8 +360,10 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       if (!next) return state
       return {
         items: next.items,
+        joints: next.joints ?? [],
         gravity: next.gravity,
         selectedId: null,
+        multiSelectedIds: [],
         history: {
           past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
           future: state.history.future.slice(1),

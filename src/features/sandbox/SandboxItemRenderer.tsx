@@ -10,13 +10,14 @@ import { SelectionGizmo } from './SelectionGizmo'
 interface SandboxItemRendererProps {
   item: SandboxItem
   selected: boolean
+  multiSelected: boolean
   editingEnabled: boolean
   gizmoMode: 'translate' | 'rotate' | 'scale'
   snapEnabled: boolean
   snapSize: number
   angleSnapEnabled: boolean
   angleSnapSize: number
-  onClick: () => void
+  onClick: (e: THREE.Event) => void
   onChange: (patch: Partial<SandboxItem>) => void
   onCommit: (patch: Partial<SandboxItem>) => void
 }
@@ -96,17 +97,49 @@ function getVisualGeometry(shape: SandboxShape, size: [number, number, number]):
   }
 }
 
-function SelectionBox({
+function SelectionOutline({
+  shape,
   size,
   scale,
 }: {
+  shape: SandboxShape
   size: [number, number, number]
   scale: [number, number, number]
 }) {
   const geometry = useMemo(() => {
-    const box = new THREE.BoxGeometry(size[0] * scale[0], size[1] * scale[1], size[2] * scale[2])
-    return new THREE.EdgesGeometry(box)
-  }, [size, scale])
+    const sx = scale[0]
+    const sy = scale[1]
+    const sz = scale[2]
+    switch (shape) {
+      case 'box':
+        return new THREE.EdgesGeometry(
+          new THREE.BoxGeometry(size[0] * sx, size[1] * sy, size[2] * sz)
+        )
+      case 'sphere': {
+        const r = size[0] * sx
+        return new THREE.EdgesGeometry(new THREE.SphereGeometry(r, 24, 12))
+      }
+      case 'cylinder':
+      case 'spring':
+        return new THREE.EdgesGeometry(
+          new THREE.CylinderGeometry(size[0] * sx, size[0] * sx, size[1] * sy, 32)
+        )
+      case 'capsule':
+        return new THREE.EdgesGeometry(
+          new THREE.CapsuleGeometry(size[0] * sx, size[1] * sy, 16, 32)
+        )
+      case 'cone':
+        return new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0] * sx, size[1] * sy, 32))
+      case 'torus':
+        return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0] * sx, size[1] * sy, 16, 48))
+      case 'plane':
+        return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0] * sx, size[2] * sz))
+      default:
+        return new THREE.EdgesGeometry(
+          new THREE.BoxGeometry(size[0] * sx, size[1] * sy, size[2] * sz)
+        )
+    }
+  }, [shape, size, scale])
 
   return (
     <lineSegments geometry={geometry}>
@@ -137,6 +170,7 @@ function SpringGeometry({ radius, height }: { radius: number; height: number }) 
 export function SandboxItemRenderer({
   item,
   selected,
+  multiSelected,
   editingEnabled,
   gizmoMode,
   snapEnabled,
@@ -150,6 +184,7 @@ export function SandboxItemRenderer({
   const { world } = usePhysics()
   const meshRef = useRef<THREE.Mesh>(null)
   const [mesh, setMesh] = useState<THREE.Mesh | null>(null)
+  const bodyRef = useRef<ReturnType<typeof world.getBody> | null>(null)
 
   const setMeshRef = useCallback((node: THREE.Mesh | null) => {
     meshRef.current = node
@@ -159,9 +194,9 @@ export function SandboxItemRenderer({
   const material = useMemo(
     () =>
       createMaterial(item.material as MaterialPreset, {
-        color: selected ? SELECTION_COLOR : item.color,
+        color: selected ? SELECTION_COLOR : multiSelected ? '#fbbf24' : item.color,
       }),
-    [item.material, item.color, selected]
+    [item.material, item.color, selected, multiSelected]
   )
 
   const geometry = useMemo(() => getVisualGeometry(item.shape, item.size), [item.shape, item.size])
@@ -183,8 +218,7 @@ export function SandboxItemRenderer({
 
     world.removeBody(itemId)
 
-    const bodyType =
-      editingEnabled && itemIsDynamic ? 'kinematic' : itemIsDynamic ? 'dynamic' : 'static'
+    const bodyType = itemIsDynamic ? 'dynamic' : 'static'
     const dimensions = getPhysicsDimensions({
       shape: itemShape,
       size: itemSize,
@@ -202,9 +236,12 @@ export function SandboxItemRenderer({
       restitution: itemRestitution,
     })
 
+    bodyRef.current = world.getBody(itemId)
+
     return () => {
       if (world.isReady) {
         world.removeBody(itemId)
+        bodyRef.current = null
       }
     }
   }, [
@@ -217,50 +254,61 @@ export function SandboxItemRenderer({
     itemMass,
     itemFriction,
     itemRestitution,
-    editingEnabled,
   ])
   /* eslint-enable react-hooks/exhaustive-deps */
 
-  // Sync body transform from store when position/rotation/scale change
-  // (e.g. undo/redo, property panel edits, or Gizmo commits).
+  // Toggle kinematic/dynamic without recreating the body.
   useEffect(() => {
-    if (!world || !world.isReady) return
-    const record = world.getBody(item.id)
-    if (!record) return
+    const body = bodyRef.current
+    if (!body) return
+    if (editingEnabled && itemIsDynamic) {
+      body.rigidBody.setBodyType(1, true) // 1 = kinematic position-based in Rapier
+    } else if (!editingEnabled && itemIsDynamic) {
+      body.rigidBody.setBodyType(0, true) // 0 = dynamic
+    }
+  }, [editingEnabled, itemIsDynamic])
 
-    const body = record.rigidBody
-    body.setTranslation({ x: item.position[0], y: item.position[1], z: item.position[2] }, true)
+  // Sync body transform from store when position/rotation/scale change
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+
+    body.rigidBody.setTranslation(
+      { x: item.position[0], y: item.position[1], z: item.position[2] },
+      true
+    )
     const q = toQuaternion(item.rotation)
-    body.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, true)
-  }, [world, item.id, item.position, item.rotation, item.scale])
+    body.rigidBody.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, true)
+  }, [item.id, item.position, item.rotation, item.scale])
 
   // Each frame: running -> read physics to mesh; editing -> write mesh to kinematic body.
   useFrame(() => {
-    if (!world || !world.isReady) return
-    const mesh = meshRef.current
-    if (!mesh) return
+    const body = bodyRef.current
+    if (!body) return
+    const meshNode = meshRef.current
+    if (!meshNode) return
 
-    const record = world.getBody(item.id)
-    if (!record) return
-
-    const body = record.rigidBody
+    const rb = body.rigidBody
 
     if (editingEnabled) {
-      body.setTranslation({ x: mesh.position.x, y: mesh.position.y, z: mesh.position.z }, true)
-      body.setRotation(
+      rb.setTranslation(
+        { x: meshNode.position.x, y: meshNode.position.y, z: meshNode.position.z },
+        true
+      )
+      rb.setRotation(
         {
-          x: mesh.quaternion.x,
-          y: mesh.quaternion.y,
-          z: mesh.quaternion.z,
-          w: mesh.quaternion.w,
+          x: meshNode.quaternion.x,
+          y: meshNode.quaternion.y,
+          z: meshNode.quaternion.z,
+          w: meshNode.quaternion.w,
         },
         true
       )
     } else {
-      const pos = body.translation()
-      const rot = body.rotation()
-      mesh.position.set(pos.x, pos.y, pos.z)
-      mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w)
+      const pos = rb.translation()
+      const rot = rb.rotation()
+      meshNode.position.set(pos.x, pos.y, pos.z)
+      meshNode.quaternion.set(rot.x, rot.y, rot.z, rot.w)
     }
   })
 
@@ -289,7 +337,10 @@ export function SandboxItemRenderer({
         {geometry.type === 'spring' && (
           <SpringGeometry radius={item.size[0]} height={item.size[1]} />
         )}
-        {selected && item.shape !== 'plane' && <SelectionBox size={item.size} scale={item.scale} />}
+        {selected && <SelectionOutline shape={item.shape} size={item.size} scale={item.scale} />}
+        {multiSelected && !selected && (
+          <SelectionOutline shape={item.shape} size={item.size} scale={item.scale} />
+        )}
       </mesh>
       <SelectionGizmo
         mesh={mesh}

@@ -11,6 +11,8 @@ export interface SceneProps {
   enableShadows?: boolean
   cameraPosition?: [number, number, number]
   cameraView?: 'free' | 'top' | 'front' | 'side' | 'follow'
+  /** Increment to force camera reset */
+  cameraResetKey?: number
 }
 
 export function Scene({
@@ -19,6 +21,7 @@ export function Scene({
   enableShadows = true,
   cameraPosition = [6, 5, 6],
   cameraView = 'free',
+  cameraResetKey,
 }: SceneProps) {
   return (
     <Canvas
@@ -42,7 +45,7 @@ export function Scene({
       <Suspense fallback={null}>
         <Lighting />
         {showGrid && <Grid />}
-        <CameraController view={cameraView} />
+        <CameraController key={cameraResetKey} view={cameraView} />
         {children}
       </Suspense>
     </Canvas>
