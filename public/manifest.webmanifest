@@ -1,0 +1,20 @@
+{
+  "name": "PhyVerse — 物理宇宙",
+  "short_name": "PhyVerse",
+  "description": "基于 Web 的 3D 高中物理实验引擎",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fefefb",
+  "theme_color": "#33A6B8",
+  "orientation": "any",
+  "scope": "/",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

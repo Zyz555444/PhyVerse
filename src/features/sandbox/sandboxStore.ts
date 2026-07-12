@@ -2,14 +2,7 @@ import { create } from 'zustand'
 import type { MaterialPreset } from '@/features/canvas/Materials'
 
 export type SandboxShape =
-  | 'box'
-  | 'sphere'
-  | 'cylinder'
-  | 'capsule'
-  | 'cone'
-  | 'plane'
-  | 'torus'
-  | 'spring'
+  'box' | 'sphere' | 'cylinder' | 'capsule' | 'cone' | 'plane' | 'torus' | 'spring'
 
 export interface SandboxItem {
   id: string
@@ -75,13 +68,15 @@ export const useSandboxStore = create<SandboxState>((set) => ({
   selectedId: null,
   gravity: [0, -9.81, 0],
 
-  addItem: (shape, position = [0, 2, 0]) =>
+  addItem: (shape, position) =>
     set((state) => {
       const id = generateId()
+      const offsetX = (Math.random() - 0.5) * 2
+      const offsetZ = (Math.random() - 0.5) * 2
       const newItem: SandboxItem = {
         id,
         shape,
-        position,
+        position: position ?? [offsetX, 3, offsetZ],
         rotation: [0, 0, 0],
         scale: [1, 1, 1],
         size: DEFAULT_SIZES[shape],

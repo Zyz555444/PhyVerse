@@ -25,10 +25,7 @@ export function SandboxItemRenderer({ item, selected, onClick }: SandboxItemRend
     color: selected ? '#f59e0b' : item.color,
   }
 
-  const shapeProps: Record<
-    SandboxItem['shape'],
-    Record<string, unknown> | null
-  > = {
+  const shapeProps: Record<SandboxItem['shape'], Record<string, unknown> | null> = {
     box: { size: item.size },
     sphere: { radius: item.size[0] },
     cylinder: { radius: item.size[0], height: item.size[1] },

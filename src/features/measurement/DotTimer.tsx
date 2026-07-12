@@ -30,7 +30,7 @@ export function DotTimer() {
     const interval = setInterval(() => {
       const now = performance.now()
       if (lastTickRef.current === null) lastTickRef.current = now
-      const t = (now - lastTickRef.current + dotIdRef.current * 0) / 1000
+      const t = (now - lastTickRef.current) / 1000
       setDots((prev) => {
         const next = [...prev, { id: dotIdRef.current++, t }]
         if (next.length > 200) next.splice(0, next.length - 200)

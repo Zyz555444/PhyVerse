@@ -13,16 +13,15 @@ const FRAME_THROTTLE = 6
 export function DataCollector({ experiment }: DataCollectorProps) {
   const { world } = usePhysics()
   const frameCountRef = useRef(0)
-  const elapsedRef = useRef(0)
 
   useFrame((_, delta) => {
     if (!world) return
 
-    const isPaused = useExperimentStore.getState().isPaused
-    if (isPaused) return
+    const store = useExperimentStore.getState()
+    if (store.isPaused) return
 
-    elapsedRef.current += delta
-    useExperimentStore.getState().tickRecording(delta)
+    store.tickTime(delta)
+    store.tickRecording(delta)
     frameCountRef.current += 1
 
     if (frameCountRef.current < FRAME_THROTTLE) {
@@ -30,7 +29,7 @@ export function DataCollector({ experiment }: DataCollectorProps) {
     }
     frameCountRef.current = 0
 
-    const t = elapsedRef.current
+    const t = store.elapsedTime
     const entries: Array<{ key: string; value: number; t: number }> = []
     for (const collector of experiment.dataCollectors) {
       try {

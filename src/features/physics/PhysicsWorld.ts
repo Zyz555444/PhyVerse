@@ -62,7 +62,13 @@ export class PhysicsWorld {
       throw new Error(`Rigid body with label "${label}" already exists`)
     }
 
-    const record = createRigidBody(this.world, def)
+    const mergedDef: RigidBodyDef = {
+      friction: this.config.contactMaterial.friction,
+      restitution: this.config.contactMaterial.restitution,
+      ...def,
+    }
+
+    const record = createRigidBody(this.world, mergedDef)
     record.label = label
     this.bodies.set(label, record)
     return record

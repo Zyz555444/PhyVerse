@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import prettier from 'eslint-plugin-prettier/recommended'
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', '*.config.*'] },
+  { ignores: ['dist', 'node_modules', 'public', '*.config.*'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -22,10 +22,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',

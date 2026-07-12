@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { PhysicsWorld } from './PhysicsWorld'
 import { PhysicsContext, type PhysicsContextValue } from './PhysicsContext'
+import { usePhysicsSettingsStore } from '@/features/settings/physicsSettingsStore'
 import type { PhysicsWorldConfig } from '@/shared/types/physics'
 
 interface PhysicsProviderProps {
@@ -19,7 +20,18 @@ export function PhysicsProvider({
   autoStep = true,
   fixedTimestep,
 }: PhysicsProviderProps) {
-  const [world] = useState(() => new PhysicsWorld(config))
+  const settings = usePhysicsSettingsStore()
+  const globalConfig = useMemo(() => settings.toConfig(), [settings])
+  const mergedConfig = useMemo<PhysicsWorldConfig>(
+    () => ({ ...globalConfig, ...config }),
+    [globalConfig, config]
+  )
+  const [world] = useState(() => new PhysicsWorld(mergedConfig))
+
+  useEffect(() => {
+    world.setGravity(mergedConfig.gravity[0], mergedConfig.gravity[1], mergedConfig.gravity[2])
+    world.setTimestep(mergedConfig.timestep)
+  }, [world, mergedConfig])
 
   useEffect(() => {
     return () => {
