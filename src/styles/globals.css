@@ -1,0 +1,168 @@
+@import 'tailwindcss';
+@plugin 'tailwindcss-animate';
+
+@theme {
+  /* Yohaku 浅色模式 - 强调色 */
+  --color-accent: #33a6b8;
+  --color-accent-soft: rgba(51, 166, 184, 0.12);
+  --color-accent-hover: #2a8f9f;
+
+  /* Yohaku 浅色模式 - 背景 */
+  --color-paper: #fefefb;
+  --color-paper-secondary: #f8f8f4;
+  --color-paper-tertiary: #f0f0ea;
+
+  /* Yohaku 浅色模式 - 文字 */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #6b6b6b;
+  --color-text-tertiary: #9b9b9b;
+
+  /* Yohaku 浅色模式 - 边框 */
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.12);
+
+  /* 语义色 */
+  --color-danger: #dc2626;
+  --color-danger-soft: rgba(220, 38, 38, 0.12);
+  --color-success: #16a34a;
+  --color-success-soft: rgba(22, 163, 74, 0.12);
+  --color-warning: #d97706;
+  --color-warning-soft: rgba(217, 119, 6, 0.12);
+
+  /* 字体 */
+  --font-heading: 'Noto Serif SC', 'Source Han Serif SC', 'STSong', 'SimSun', serif;
+  --font-body: 'Inter', 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Yohaku 缓动 */
+  --ease-yohaku: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* 间距 - 基于 8px 网格 */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-5: 1.25rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* 深色模式 */
+.dark {
+  --color-accent: #f596aa;
+  --color-accent-soft: rgba(245, 150, 170, 0.15);
+  --color-accent-hover: #e07a90;
+  --color-paper: rgb(28, 28, 30);
+  --color-paper-secondary: rgb(38, 38, 40);
+  --color-paper-tertiary: rgb(48, 48, 50);
+  --color-text-primary: #e8e8e6;
+  --color-text-secondary: #98989a;
+  --color-text-tertiary: #68686a;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  /* 语义色 */
+  --color-danger: #ef4444;
+  --color-danger-soft: rgba(239, 68, 68, 0.15);
+  --color-success: #22c55e;
+  --color-success-soft: rgba(34, 197, 94, 0.15);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.15);
+}
+
+/* 基础样式 */
+html {
+  font-size: 14px;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}
+
+/* 呼吸式过渡 - 仅针对主题相关属性 */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 250ms var(--ease-yohaku),
+    color 250ms var(--ease-yohaku),
+    border-color 250ms var(--ease-yohaku),
+    opacity 400ms var(--ease-yohaku);
+}
+
+/* 禁用部分元素的全局过渡以保持交互响应 */
+button,
+a,
+input,
+textarea,
+select,
+[role='slider'] {
+  transition:
+    background-color 250ms var(--ease-yohaku),
+    color 250ms var(--ease-yohaku),
+    border-color 250ms var(--ease-yohaku),
+    box-shadow 250ms var(--ease-yohaku),
+    transform 250ms var(--ease-yohaku);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-tertiary);
+  border-radius: var(--radius-full);
+  opacity: 0.3;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* 选中高亮 */
+::selection {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}
