@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { render, type RenderOptions } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactElement, ReactNode } from 'react'
@@ -14,10 +15,7 @@ function AllProviders({ children }: { children: ReactNode }) {
   )
 }
 
-export function renderWithProviders(
-  ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
-) {
+export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
   return render(ui, { wrapper: AllProviders, ...options })
 }
 

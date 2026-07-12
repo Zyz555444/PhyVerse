@@ -31,7 +31,6 @@ class ResizeObserverMock {
 
 globalThis.ResizeObserver = ResizeObserverMock
 
-// eslint-disable-next-line @typescript-eslint/no-empty-function
 const consoleError = console.error
 console.error = (...args: unknown[]) => {
   // Suppress React act() warnings in tests

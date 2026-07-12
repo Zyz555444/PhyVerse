@@ -12,11 +12,8 @@ interface ExperimentSetupProps {
 }
 
 export function ExperimentSetup({ experiment, params, children }: ExperimentSetupProps) {
-  const paramKey = useMemo(() => JSON.stringify(params), [params])
-  const mountKey = `${experiment.id}-${paramKey}`
-
   return (
-    <ExperimentSetupInner key={mountKey} experiment={experiment} params={params}>
+    <ExperimentSetupInner experiment={experiment} params={params}>
       {children}
     </ExperimentSetupInner>
   )
@@ -24,22 +21,21 @@ export function ExperimentSetup({ experiment, params, children }: ExperimentSetu
 
 function ExperimentSetupInner({ experiment, params, children }: ExperimentSetupProps) {
   const { world } = usePhysics()
-
-  const [setupResult] = useState<SetupResult | null>(() => {
-    if (!world) return null
-    return experiment.setup(world, params)
-  })
+  const [setupResult, setSetupResult] = useState<SetupResult | null>(null)
 
   useEffect(() => {
-    if (!world || !setupResult) return
-    const result = setupResult
+    if (!world) return
+    const result = experiment.setup(world, params)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSetupResult(result)
     return () => {
       result.cleanup?.()
+      if (!world.isReady) return
       for (const label of result.bodyLabels) {
         world.removeBody(label)
       }
     }
-  }, [world, setupResult])
+  }, [world, experiment, params])
 
   if (!setupResult?.bodies) {
     return <>{children}</>

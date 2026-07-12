@@ -44,7 +44,6 @@ export function Experiment() {
   const experiment = experimentId ? getExperiment(experimentId) : undefined
 
   const params = useExperimentStore((s) => s.params)
-  const resetCounter = useExperimentStore((s) => s.resetCounter)
   const isPaused = useExperimentStore((s) => s.isPaused)
   const setParams = useExperimentStore((s) => s.setParams)
   const togglePause = useExperimentStore((s) => s.togglePause)
@@ -83,7 +82,6 @@ export function Experiment() {
     )
   }
 
-  const setupKey = `${experiment.id}-${JSON.stringify(params)}-${resetCounter}`
   const difficultyLabel =
     experiment.difficulty <= 1
       ? t('experiment.difficulty.easy')
@@ -148,7 +146,7 @@ export function Experiment() {
           <div className="relative h-[600px] overflow-hidden rounded-xl border border-border bg-paper-tertiary">
             <Scene cameraPosition={[6, 5, 6]} cameraView="free" showGrid>
               <PhysicsProvider key={experiment.id} autoStep={!isPaused}>
-                <ExperimentSetup key={setupKey} experiment={experiment} params={params} />
+                <ExperimentSetup experiment={experiment} params={params} />
                 <DataCollector experiment={experiment} />
                 <VirtualRuler />
                 <VirtualProtractor />

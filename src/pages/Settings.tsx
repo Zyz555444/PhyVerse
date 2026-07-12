@@ -13,7 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
-const APP_VERSION = '0.0.0'
+const APP_VERSION = '1.1.5'
 
 export function Settings() {
   const { theme, setTheme } = useTheme()
