@@ -9,6 +9,8 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:4173',
+    viewport: { width: 1280, height: 720 },
+    locale: 'zh-CN',
     trace: 'on-first-retry',
   },
   projects: [

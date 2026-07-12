@@ -22,7 +22,7 @@ export function Scene({
 }: SceneProps) {
   return (
     <Canvas
-      shadows={enableShadows}
+      shadows={enableShadows ? 'percentage' : false}
       gl={{
         antialias: true,
         toneMapping: THREE.ACESFilmicToneMapping,

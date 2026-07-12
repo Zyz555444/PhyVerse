@@ -1,1 +1,5 @@
 import './mechanics'
+import './electromagnetism'
+import './optics'
+import './thermal'
+import './modern'

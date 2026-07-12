@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { FlaskConical, Moon, Search, Sun, Globe } from 'lucide-react'
+import { FlaskConical, Moon, Search, Sun, Globe, Menu, X } from 'lucide-react'
 import { useTheme } from '@/shared/hooks/useTheme'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
@@ -13,6 +13,7 @@ export function Header() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [searchValue, setSearchValue] = useState(searchParams.get('q') ?? '')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const handleSearch = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -94,8 +95,47 @@ export function Header() {
               <Globe className="h-4 w-4" />
             </Button>
           </Tooltip>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full px-2.5 md:hidden"
+            aria-label={menuOpen ? t('common.close') : t('common.menu')}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
+
+      {menuOpen && (
+        <div className="border-t border-border bg-paper px-6 py-4 md:hidden">
+          <nav className="flex flex-col gap-3">
+            <Link
+              to="/"
+              className="text-sm text-text-secondary transition-colors hover:text-text-primary"
+              onClick={() => setMenuOpen(false)}
+            >
+              {t('nav.home')}
+            </Link>
+            <Link
+              to="/sandbox"
+              className="text-sm text-text-secondary transition-colors hover:text-text-primary"
+              onClick={() => setMenuOpen(false)}
+            >
+              {t('nav.sandbox')}
+            </Link>
+            <Link
+              to="/settings"
+              className="text-sm text-text-secondary transition-colors hover:text-text-primary"
+              onClick={() => setMenuOpen(false)}
+            >
+              {t('nav.settings')}
+            </Link>
+          </nav>
+        </div>
+      )}
     </header>
   )
 }

@@ -1,0 +1,7 @@
+import './refractionIndex'
+import './doubleSlitInterference'
+import './lensFocalLength'
+import './polarization'
+import './newtonRings'
+import './diffractionGrating'
+import './totalInternalReflection'

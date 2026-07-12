@@ -59,7 +59,9 @@ export class PhysicsWorld {
 
   addBody(label: string, def: RigidBodyDef): PhysicsBodyRecord {
     if (this.bodies.has(label)) {
-      throw new Error(`Rigid body with label "${label}" already exists`)
+      // Defensive: remove stale body instead of crashing. This can happen when
+      // an experiment remounts before the previous cleanup has fully run.
+      this.removeBody(label)
     }
 
     const mergedDef: RigidBodyDef = {

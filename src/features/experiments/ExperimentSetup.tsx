@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePhysics } from '@/features/physics/usePhysics'
 import { usePhysicsSync } from '@/features/physics/usePhysicsSync'
 import { createMaterial } from '@/features/canvas/Materials'
@@ -22,12 +22,27 @@ export function ExperimentSetup({ experiment, params, children }: ExperimentSetu
 function ExperimentSetupInner({ experiment, params, children }: ExperimentSetupProps) {
   const { world } = usePhysics()
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null)
+  const prevResultRef = useRef<SetupResult | null>(null)
 
   useEffect(() => {
     if (!world) return
+    // Explicitly clean up the previous setup before creating a new one. This
+    // guards against any edge case where the standard effect cleanup is skipped.
+    const prevResult = prevResultRef.current
+    if (prevResult) {
+      prevResult.cleanup?.()
+      if (world.isReady) {
+        for (const label of prevResult.bodyLabels) {
+          world.removeBody(label)
+        }
+      }
+    }
+
     const result = experiment.setup(world, params)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSetupResult(result)
+    prevResultRef.current = result
+
     return () => {
       result.cleanup?.()
       if (!world.isReady) return
