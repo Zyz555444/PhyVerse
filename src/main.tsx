@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/globals.css'
 import App from './App.tsx'
+import { ErrorBoundary } from './shared/ui/ErrorBoundary.tsx'
 
 // Suppress known harmless deprecation warnings from @react-three/fiber internals
 // until the library migrates from THREE.Clock/PCFSoftShadowMap.
@@ -22,7 +23,9 @@ console.warn = (...args: unknown[]) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>
 )
 
