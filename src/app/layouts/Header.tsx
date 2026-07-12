@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useState, type KeyboardEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FlaskConical, Moon, Search, Sun, Globe } from 'lucide-react'
 import { useTheme } from '@/shared/hooks/useTheme'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -9,6 +10,20 @@ import { cn } from '@/shared/utils/cn'
 export function Header() {
   const { theme, toggleTheme } = useTheme()
   const { language, setLanguage, t } = useI18n()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [searchValue, setSearchValue] = useState(searchParams.get('q') ?? '')
+
+  const handleSearch = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const trimmed = searchValue.trim()
+      if (trimmed) {
+        navigate(`/?q=${encodeURIComponent(trimmed)}`)
+      } else {
+        navigate('/')
+      }
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-paper/80 backdrop-blur-md">
@@ -44,6 +59,9 @@ export function Header() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <input
               type="text"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={handleSearch}
               placeholder={t('common.search')}
               className={cn(
                 'h-9 w-48 rounded-full border border-border bg-paper-secondary pl-9 pr-4',
