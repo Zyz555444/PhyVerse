@@ -12,6 +12,8 @@ interface PhysicsProviderProps {
   autoStep?: boolean
   /** Fixed timestep override (seconds). If not set, uses config.timestep */
   fixedTimestep?: number
+  /** Simulation speed multiplier. Default: 1 */
+  timeScale?: number
 }
 
 export function PhysicsProvider({
@@ -19,6 +21,7 @@ export function PhysicsProvider({
   config,
   autoStep = true,
   fixedTimestep,
+  timeScale = 1,
 }: PhysicsProviderProps) {
   const settings = usePhysicsSettingsStore()
   const globalConfig = useMemo(() => settings.toConfig(), [settings])
@@ -45,7 +48,8 @@ export function PhysicsProvider({
     if (!world.isReady || !autoStep) return
 
     const timestep = fixedTimestep ?? world.getTimestep()
-    accumulatorRef.current += Math.min(delta, 0.1)
+    const scaledDelta = delta * timeScale
+    accumulatorRef.current += Math.min(scaledDelta, 0.1)
 
     while (accumulatorRef.current >= timestep) {
       world.setTimestep(timestep)
