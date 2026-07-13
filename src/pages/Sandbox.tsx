@@ -47,6 +47,7 @@ export function Sandbox() {
   const gravity = useSandboxStore((s) => s.gravity)
   const selectedId = useSandboxStore((s) => s.selectedId)
   const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
+  const isGizmoDragging = useSandboxStore((s) => s.isGizmoDragging)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const selectItem = useSandboxStore((s) => s.selectItem)
   const updateItem = useSandboxStore((s) => s.updateItem)
@@ -109,10 +110,7 @@ export function Sandbox() {
     },
     onPaste: () => pasteItem(),
     onToggleSnap: () => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled }),
-    isGizmoActive: () => {
-      const gizmo = canvasContainerRef.current?.querySelector('[data-gizmo="dragging"]')
-      return Boolean(gizmo)
-    },
+    isGizmoActive: () => isGizmoDragging,
     hasSelection: !!selectedId,
   })
 

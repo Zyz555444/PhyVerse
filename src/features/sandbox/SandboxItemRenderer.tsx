@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
+import type { PhysicsWorld } from '@/features/physics/PhysicsWorld'
 import { createMaterial, type MaterialPreset } from '@/features/canvas/Materials'
 import type { ShapeType } from '@/shared/types/physics'
 import type { SandboxItem, SandboxShape } from './sandboxStore'
@@ -17,7 +18,7 @@ interface SandboxItemRendererProps {
   snapSize: number
   angleSnapEnabled: boolean
   angleSnapSize: number
-  onClick: (e: THREE.Event) => void
+  onClick: (e: ThreeEvent<MouseEvent>) => void
   onChange: (patch: Partial<SandboxItem>) => void
   onCommit: (patch: Partial<SandboxItem>) => void
 }
@@ -190,7 +191,7 @@ export function SandboxItemRenderer({
   const { world } = usePhysics()
   const meshRef = useRef<THREE.Mesh>(null)
   const [mesh, setMesh] = useState<THREE.Mesh | null>(null)
-  const bodyRef = useRef<ReturnType<typeof world.getBody> | null>(null)
+  const bodyRef = useRef<ReturnType<PhysicsWorld['getBody']> | null>(null)
 
   const setMeshRef = useCallback((node: THREE.Mesh | null) => {
     meshRef.current = node

@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { PageLoader } from '@/shared/ui/PageLoader'
 import { NotFound } from '@/pages/NotFound'
+import { ErrorPage } from '@/pages/ErrorPage'
 
 const Landing = lazy(() => import('@/pages/Landing').then((m) => ({ default: m.Landing })))
 const Experiment = lazy(() => import('@/pages/Experiment').then((m) => ({ default: m.Experiment })))
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <RootLayout />,
+    errorElement: <ErrorPage />,
     children: [
       {
         index: true,

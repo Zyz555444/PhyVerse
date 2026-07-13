@@ -65,6 +65,7 @@ interface SandboxState extends SandboxScene {
   editorConfig: SandboxEditorConfig
   clipboard: SandboxItem[] | null
   joints: SandboxJoint[]
+  isGizmoDragging: boolean
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -82,6 +83,7 @@ interface SandboxState extends SandboxScene {
   undo: () => void
   redo: () => void
   setEditorConfig: (patch: Partial<SandboxEditorConfig>) => void
+  setGizmoDragging: (dragging: boolean) => void
 }
 
 const DEFAULT_COLORS: Record<SandboxShape, string> = {
@@ -176,6 +178,7 @@ export const useSandboxStore = create<SandboxState>((set) => ({
   history: { past: [], future: [] },
   editorConfig: DEFAULT_EDITOR_CONFIG,
   clipboard: null,
+  isGizmoDragging: false,
 
   addItem: (shape, position) =>
     set((state) => {
@@ -375,5 +378,10 @@ export const useSandboxStore = create<SandboxState>((set) => ({
   setEditorConfig: (patch) =>
     set((state) => ({
       editorConfig: { ...state.editorConfig, ...patch },
+    })),
+
+  setGizmoDragging: (dragging) =>
+    set(() => ({
+      isGizmoDragging: dragging,
     })),
 }))

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { TransformControls } from '@react-three/drei'
 import type { Object3D } from 'three'
 import type { SandboxItem, GizmoMode } from './sandboxStore'
+import { useSandboxStore } from './sandboxStore'
 
 interface SelectionGizmoProps {
   mesh: Object3D | null
@@ -26,6 +27,7 @@ export function SelectionGizmo({
   onCommit,
   enabled,
 }: SelectionGizmoProps) {
+  const setGizmoDragging = useSandboxStore((s) => s.setGizmoDragging)
   const [isDragging, setIsDragging] = useState(false)
   const draggingRef = useRef(false)
   const dragStartTransform = useRef<ReturnType<typeof readTransform> | null>(null)
@@ -41,6 +43,10 @@ export function SelectionGizmo({
       scale: [scl.x, scl.y, scl.z] as [number, number, number],
     }
   }, [mesh])
+
+  useEffect(() => {
+    setGizmoDragging(isDragging)
+  }, [isDragging, setGizmoDragging])
 
   useEffect(() => {
     if (!enabled) return
@@ -74,7 +80,6 @@ export function SelectionGizmo({
       enabled={enabled}
       translationSnap={snapEnabled && mode === 'translate' ? snapSize : undefined}
       rotationSnap={angleSnapEnabled && mode === 'rotate' ? angleSnapSize : undefined}
-      data-gizmo={isDragging ? 'dragging' : 'idle'}
       onPointerDown={() => {
         draggingRef.current = true
         setIsDragging(true)
