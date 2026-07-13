@@ -129,11 +129,17 @@ function SelectionOutline({
           new THREE.CapsuleGeometry(size[0] * sx, size[1] * sy, 16, 32)
         )
       case 'cone':
-        return new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0] * sx, size[1] * sy, 32))
+        return new THREE.EdgesGeometry(
+          new THREE.ConeGeometry(size[0] * sx, size[1] * sy, 32)
+        )
       case 'torus':
-        return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0] * sx, size[1] * sy, 16, 48))
+        return new THREE.EdgesGeometry(
+          new THREE.TorusGeometry(size[0] * sx, size[1] * sy, 16, 48)
+        )
       case 'plane':
-        return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0] * sx, size[2] * sz))
+        return new THREE.EdgesGeometry(
+          new THREE.PlaneGeometry(size[0] * sx, size[2] * sz)
+        )
       default:
         return new THREE.EdgesGeometry(
           new THREE.BoxGeometry(size[0] * sx, size[1] * sy, size[2] * sz)
@@ -273,10 +279,7 @@ export function SandboxItemRenderer({
     const body = bodyRef.current
     if (!body) return
 
-    body.rigidBody.setTranslation(
-      { x: item.position[0], y: item.position[1], z: item.position[2] },
-      true
-    )
+    body.rigidBody.setTranslation({ x: item.position[0], y: item.position[1], z: item.position[2] }, true)
     const q = toQuaternion(item.rotation)
     body.rigidBody.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, true)
   }, [item.id, item.position, item.rotation, item.scale])
@@ -291,10 +294,7 @@ export function SandboxItemRenderer({
     const rb = body.rigidBody
 
     if (editingEnabled) {
-      rb.setTranslation(
-        { x: meshNode.position.x, y: meshNode.position.y, z: meshNode.position.z },
-        true
-      )
+      rb.setTranslation({ x: meshNode.position.x, y: meshNode.position.y, z: meshNode.position.z }, true)
       rb.setRotation(
         {
           x: meshNode.quaternion.x,

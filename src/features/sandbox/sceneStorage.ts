@@ -72,8 +72,7 @@ function isSandboxJoint(value: unknown): value is SandboxJoint {
   if (!value || typeof value !== 'object') return false
   const j = value as Partial<SandboxJoint>
   if (typeof j.id !== 'string' || j.id.length === 0) return false
-  if (typeof j.type !== 'string' || !JOINT_TYPES.includes(j.type as (typeof JOINT_TYPES)[number]))
-    return false
+  if (typeof j.type !== 'string' || !JOINT_TYPES.includes(j.type as typeof JOINT_TYPES[number])) return false
   if (typeof j.bodyA !== 'string' || j.bodyA.length === 0) return false
   if (typeof j.bodyB !== 'string' || j.bodyB.length === 0) return false
   if (j.anchorA !== undefined && !isTuple3(j.anchorA)) return false
@@ -88,11 +87,7 @@ export function isSandboxScene(value: unknown): value is SandboxScene {
   if (!isTuple3(scene.gravity)) return false
   if (!Array.isArray(scene.items)) return false
   if (!scene.items.every((item) => isSandboxItem(item))) return false
-  if (
-    scene.joints !== undefined &&
-    (!Array.isArray(scene.joints) || !scene.joints.every((j) => isSandboxJoint(j)))
-  )
-    return false
+  if (scene.joints !== undefined && (!Array.isArray(scene.joints) || !scene.joints.every((j) => isSandboxJoint(j)))) return false
 
   return true
 }

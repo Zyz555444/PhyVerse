@@ -151,9 +151,7 @@ function snapshot(state: Pick<SandboxState, 'items' | 'gravity' | 'joints'>): Sa
 
 const HISTORY_LIMIT = 50
 
-function pushHistory(
-  state: Pick<SandboxState, 'items' | 'gravity' | 'joints' | 'history'>
-): HistoryState {
+function pushHistory(state: Pick<SandboxState, 'items' | 'gravity' | 'joints' | 'history'>): HistoryState {
   return {
     past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
     future: [],
@@ -191,7 +189,9 @@ export const useSandboxStore = create<SandboxState>((set) => ({
 
   removeItem: (id) =>
     set((state) => {
-      const idsToRemove = state.multiSelectedIds.length > 0 ? [id, ...state.multiSelectedIds] : [id]
+      const idsToRemove = state.multiSelectedIds.length > 0
+        ? [id, ...state.multiSelectedIds]
+        : [id]
       const removeSet = new Set(idsToRemove)
       return {
         items: state.items.filter((item) => !removeSet.has(item.id)),
@@ -245,18 +245,20 @@ export const useSandboxStore = create<SandboxState>((set) => ({
 
   duplicateItem: (id) =>
     set((state) => {
-      const idsToDup = state.multiSelectedIds.length > 0 ? [id, ...state.multiSelectedIds] : [id]
+      const idsToDup = state.multiSelectedIds.length > 0
+        ? [id, ...state.multiSelectedIds]
+        : [id]
       const dupSet = new Set(idsToDup)
       const sources = state.items.filter((item) => dupSet.has(item.id))
       if (sources.length === 0) return state
       const newItems: SandboxItem[] = sources.map((source) => ({
         ...source,
         id: generateId(),
-        position: [source.position[0] + 0.5, source.position[1], source.position[2] + 0.5] as [
-          number,
-          number,
-          number,
-        ],
+        position: [
+          source.position[0] + 0.5,
+          source.position[1],
+          source.position[2] + 0.5,
+        ] as [number, number, number],
       }))
       return {
         items: [...state.items, ...newItems],
@@ -268,10 +270,9 @@ export const useSandboxStore = create<SandboxState>((set) => ({
 
   copyItem: (id) =>
     set((state) => {
-      const idsToCopy =
-        state.multiSelectedIds.length > 0
-          ? ([state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[])
-          : [id]
+      const idsToCopy = state.multiSelectedIds.length > 0
+        ? [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+        : [id]
       const items = idsToCopy
         .map((iid) => state.items.find((item) => item.id === iid))
         .filter(Boolean) as SandboxItem[]
@@ -284,11 +285,11 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       const pastedItems: SandboxItem[] = state.clipboard.map((item) => ({
         ...item,
         id: generateId(),
-        position: [item.position[0] + 0.5, item.position[1], item.position[2] + 0.5] as [
-          number,
-          number,
-          number,
-        ],
+        position: [
+          item.position[0] + 0.5,
+          item.position[1],
+          item.position[2] + 0.5,
+        ] as [number, number, number],
       }))
       return {
         items: [...state.items, ...pastedItems],
