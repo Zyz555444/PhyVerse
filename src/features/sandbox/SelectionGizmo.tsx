@@ -33,7 +33,12 @@ export function SelectionGizmo({
   const dragStartTransform = useRef<ReturnType<typeof readTransform> | null>(null)
 
   const readTransform = useCallback(() => {
-    if (!mesh) return { position: [0, 0, 0] as [number, number, number], rotation: [0, 0, 0] as [number, number, number], scale: [1, 1, 1] as [number, number, number] }
+    if (!mesh)
+      return {
+        position: [0, 0, 0] as [number, number, number],
+        rotation: [0, 0, 0] as [number, number, number],
+        scale: [1, 1, 1] as [number, number, number],
+      }
     const pos = mesh.position
     const rot = mesh.rotation
     const scl = mesh.scale
@@ -57,11 +62,18 @@ export function SelectionGizmo({
         setIsDragging(false)
         const current = readTransform()
         const start = dragStartTransform.current
-        if (start && (
-          start.position[0] !== current.position[0] || start.position[1] !== current.position[1] || start.position[2] !== current.position[2] ||
-          start.rotation[0] !== current.rotation[0] || start.rotation[1] !== current.rotation[1] || start.rotation[2] !== current.rotation[2] ||
-          start.scale[0] !== current.scale[0] || start.scale[1] !== current.scale[1] || start.scale[2] !== current.scale[2]
-        )) {
+        if (
+          start &&
+          (start.position[0] !== current.position[0] ||
+            start.position[1] !== current.position[1] ||
+            start.position[2] !== current.position[2] ||
+            start.rotation[0] !== current.rotation[0] ||
+            start.rotation[1] !== current.rotation[1] ||
+            start.rotation[2] !== current.rotation[2] ||
+            start.scale[0] !== current.scale[0] ||
+            start.scale[1] !== current.scale[1] ||
+            start.scale[2] !== current.scale[2])
+        ) {
           onCommit(current)
         }
       }

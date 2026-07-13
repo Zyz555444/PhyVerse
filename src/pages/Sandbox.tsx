@@ -319,7 +319,12 @@ export function Sandbox() {
           className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
           data-sandbox-canvas
         >
-          <Scene cameraPosition={[8, 6, 8]} cameraView={editorConfig.cameraView} cameraResetKey={cameraResetKey} showGrid>
+          <Scene
+            cameraPosition={[8, 6, 8]}
+            cameraView={editorConfig.cameraView}
+            cameraResetKey={cameraResetKey}
+            showGrid
+          >
             <PhysicsProvider
               config={{ gravity }}
               autoStep={isRunning}
@@ -341,7 +346,10 @@ export function Sandbox() {
                   angleSnapSize={editorConfig.angleSnapSize}
                   onClick={(e) => {
                     e.stopPropagation()
-                    selectItem(item.id, (e.nativeEvent as MouseEvent).ctrlKey || (e.nativeEvent as MouseEvent).metaKey)
+                    selectItem(
+                      item.id,
+                      (e.nativeEvent as MouseEvent).ctrlKey || (e.nativeEvent as MouseEvent).metaKey
+                    )
                   }}
                   onChange={(patch) => updateItem(item.id, patch)}
                   onCommit={(patch) => {

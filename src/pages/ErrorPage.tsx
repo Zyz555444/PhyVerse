@@ -4,7 +4,6 @@ export function ErrorPage(): React.ReactElement {
   const error = useRouteError()
 
   // Log to console for debugging; route errors often contain useful stack traces.
-  // eslint-disable-next-line no-console
   console.error('Route error:', error)
 
   return (

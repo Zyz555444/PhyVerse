@@ -90,7 +90,8 @@ const translations: Record<Language, Record<string, string>> = {
     'sandbox.cameraReset': '重置相机',
     'sandbox.undo': '撤销',
     'sandbox.redo': '重做',
-    'sandbox.shortcuts': '快捷键：Space 运行/暂停 · G 吸附 · T/R/S 变换 · Del 删除 · Ctrl+Z/Y 撤销/重做 · Ctrl+D 复制 · Ctrl+C/V 复制/粘贴 · Esc 取消选择',
+    'sandbox.shortcuts':
+      '快捷键：Space 运行/暂停 · G 吸附 · T/R/S 变换 · Del 删除 · Ctrl+Z/Y 撤销/重做 · Ctrl+D 复制 · Ctrl+C/V 复制/粘贴 · Esc 取消选择',
     'common.search': '搜索实验...',
     'common.loading': '加载中...',
     'common.empty': '暂无内容',
@@ -200,7 +201,8 @@ const translations: Record<Language, Record<string, string>> = {
     'sandbox.cameraReset': 'Reset Camera',
     'sandbox.undo': 'Undo',
     'sandbox.redo': 'Redo',
-    'sandbox.shortcuts': 'Shortcuts: Space Play/Pause · G Snap · T/R/S Transform · Del Delete · Ctrl+Z/Y Undo/Redo · Ctrl+D Duplicate · Ctrl+C/V Copy/Paste · Esc Deselect',
+    'sandbox.shortcuts':
+      'Shortcuts: Space Play/Pause · G Snap · T/R/S Transform · Del Delete · Ctrl+Z/Y Undo/Redo · Ctrl+D Duplicate · Ctrl+C/V Copy/Paste · Esc Deselect',
     'common.search': 'Search experiments...',
     'common.loading': 'Loading...',
     'common.empty': 'No content',
