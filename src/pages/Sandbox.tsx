@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useThree } from '@react-three/fiber'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { Scene } from '@/features/canvas/Scene'
@@ -8,6 +9,7 @@ import {
   useSandboxStore,
   type SandboxScene,
   type SandboxCameraView,
+  type JointType,
 } from '@/features/sandbox/sandboxStore'
 import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
@@ -33,12 +35,42 @@ import {
   Eraser,
   Check,
   Magnet,
-  Timer,
   Camera,
   X,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Link2,
+  Undo2,
+  Redo2,
+  Box as BoxIcon,
 } from 'lucide-react'
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
+
+const JOINT_TYPES: { type: JointType; labelKey: string }[] = [
+  { type: 'spring', labelKey: 'sandbox.shape.spring' },
+  { type: 'rope', labelKey: 'sandbox.jointRope' },
+  { type: 'fixed', labelKey: 'sandbox.jointFixed' },
+]
+
+function DeselectOnEmpty({ onSelect }: { onSelect: () => void }) {
+  const { gl } = useThree()
+  useEffect(() => {
+    const dom = gl.domElement
+    const handler = (e: PointerEvent) => {
+      if (e.target === dom) {
+        onSelect()
+      }
+    }
+    dom.addEventListener('pointerdown', handler)
+    return () => dom.removeEventListener('pointerdown', handler)
+  }, [gl, onSelect])
+  return null
+}
 
 export function Sandbox() {
   const { t } = useI18n()
@@ -49,6 +81,7 @@ export function Sandbox() {
   const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
   const isGizmoDragging = useSandboxStore((s) => s.isGizmoDragging)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
+  const ui = useSandboxStore((s) => s.ui)
   const selectItem = useSandboxStore((s) => s.selectItem)
   const updateItem = useSandboxStore((s) => s.updateItem)
   const commitHistory = useSandboxStore((s) => s.commitHistory)
@@ -62,14 +95,17 @@ export function Sandbox() {
   const undo = useSandboxStore((s) => s.undo)
   const redo = useSandboxStore((s) => s.redo)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
+  const setUI = useSandboxStore((s) => s.setUI)
+  const addJoint = useSandboxStore((s) => s.addJoint)
 
-  const [isRunning, setIsRunning] = useState(true)
+  const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [cameraResetKey, setCameraResetKey] = useState(0)
+  const [showJointMenu, setShowJointMenu] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const jointMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const stored = loadStoredScene()
@@ -84,14 +120,25 @@ export function Sandbox() {
   }, 800)
 
   useEffect(() => {
-    debouncedSave({ items, gravity })
-  }, [items, gravity, debouncedSave])
+    debouncedSave({ items, gravity, joints })
+  }, [items, gravity, joints, debouncedSave])
 
   useEffect(() => {
     if (!saved) return
     const timer = setTimeout(() => setSaved(false), 2000)
     return () => clearTimeout(timer)
   }, [saved])
+
+  useEffect(() => {
+    if (!showJointMenu) return
+    const handler = (e: MouseEvent) => {
+      if (jointMenuRef.current && !jointMenuRef.current.contains(e.target as Node)) {
+        setShowJointMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showJointMenu])
 
   useSandboxShortcuts({
     onRunToggle: () => setIsRunning((r) => !r),
@@ -110,12 +157,13 @@ export function Sandbox() {
     },
     onPaste: () => pasteItem(),
     onToggleSnap: () => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled }),
+    onToggleFullscreen: () => setUI({ isFullscreen: !ui.isFullscreen }),
     isGizmoActive: () => isGizmoDragging,
     hasSelection: !!selectedId,
   })
 
   const handleExport = () => {
-    exportScene({ items, gravity })
+    exportScene({ items, gravity, joints })
   }
 
   const handleImportClick = () => {
@@ -142,20 +190,63 @@ export function Sandbox() {
     }
   }
 
+  const handleCreateJoint = (type: JointType) => {
+    const allSelected = [selectedId, ...multiSelectedIds].filter(Boolean) as string[]
+    if (allSelected.length < 2) return
+    addJoint({
+      type,
+      bodyA: allSelected[0],
+      bodyB: allSelected[1],
+      anchorA: [0, 0, 0],
+      anchorB: [0, 0, 0],
+      ...(type === 'spring' ? { restLength: 1, stiffness: 100, damping: 5 } : {}),
+      ...(type === 'rope' ? { maxDistance: 1.5 } : {}),
+    })
+    setShowJointMenu(false)
+  }
+
+  const canCreateJoint = [selectedId, ...multiSelectedIds].filter(Boolean).length >= 2
+
+  const friendlyName = useSandboxStore((s) => {
+    if (!selectedId) return ''
+    const item = s.items.find((it) => it.id === selectedId)
+    if (!item) return selectedId.slice(0, 8)
+    const shapeNames: Record<string, string> = {
+      box: '长方体',
+      sphere: '球体',
+      cylinder: '圆柱',
+      capsule: '胶囊',
+      cone: '圆锥',
+      plane: '平面',
+      torus: '圆环',
+      spring: '弹簧',
+    }
+    const idx = s.items.filter((it) => it.shape === item.shape).indexOf(item)
+    return `${shapeNames[item.shape] ?? item.shape} ${idx + 1}`
+  })
+
   const gizmoMode = editorConfig.gizmoMode
+  const isFullscreen = ui.isFullscreen
+  const leftOpen = ui.isLeftPanelOpen
+  const rightOpen = ui.isRightPanelOpen
+
+  const containerClass = useMemo(() => {
+    if (isFullscreen) {
+      return 'fixed inset-0 z-50 flex flex-col bg-paper p-2'
+    }
+    return 'flex flex-col py-4'
+  }, [isFullscreen])
+
+  const canvasHeight = isFullscreen ? 'flex-1' : 'h-[calc(100vh-180px)] min-h-[400px]'
 
   return (
-    <div className="py-6">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-heading text-3xl text-text-primary">{t('nav.sandbox')}</h1>
-          <p className="mt-2 text-text-secondary">
-            {items.length > 0
-              ? `${t('sandbox.bodyCount', { count: items.length, joints: joints.length })}`
-              : t('app.tagline')}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className={containerClass}>
+      {/* Compact toolbar */}
+      <div className={cn('mb-2 flex flex-wrap items-center gap-2', isFullscreen && 'px-1 pt-1')}>
+        <div className="flex items-center gap-2">
+          {!isFullscreen && (
+            <h1 className="font-heading text-xl text-text-primary">{t('nav.sandbox')}</h1>
+          )}
           <Button
             size="sm"
             variant={isRunning ? 'secondary' : 'primary'}
@@ -166,161 +257,203 @@ export function Sandbox() {
           >
             {isRunning ? t('sandbox.pause') : t('sandbox.run')}
           </Button>
+        </div>
 
-          {!isRunning && selectedId && (
-            <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
-              {(
-                [
-                  ['translate', 'sandbox.gizmoTranslate'],
-                  ['rotate', 'sandbox.gizmoRotate'],
-                  ['scale', 'sandbox.gizmoScale'],
-                ] as const
-              ).map(([mode, labelKey]) => (
+        <div className="flex items-center gap-1">
+          <ToolButton icon={Undo2} onClick={undo} title={t('sandbox.undo')} size="sm" />
+          <ToolButton icon={Redo2} onClick={redo} title={t('sandbox.redo')} size="sm" />
+        </div>
+
+        <Divider />
+
+        {!isRunning && selectedId && (
+          <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
+            {(
+              [
+                ['translate', 'sandbox.gizmoTranslate'],
+                ['rotate', 'sandbox.gizmoRotate'],
+                ['scale', 'sandbox.gizmoScale'],
+              ] as const
+            ).map(([mode, labelKey]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setEditorConfig({ gizmoMode: mode })}
+                className={cn(
+                  'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                  gizmoMode === mode
+                    ? 'bg-accent-soft text-accent'
+                    : 'text-text-secondary hover:text-text-primary'
+                )}
+              >
+                {t(labelKey)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <ToolButton
+          icon={Magnet}
+          onClick={() => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled })}
+          title={t('sandbox.snap')}
+          active={editorConfig.snapEnabled}
+        />
+
+        <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
+          <Camera className="ml-1.5 mr-0.5 h-3.5 w-3.5 text-text-tertiary" />
+          {CAMERA_VIEWS.map((view) => (
+            <button
+              key={view}
+              type="button"
+              onClick={() => setEditorConfig({ cameraView: view })}
+              className={cn(
+                'rounded-md px-1.5 py-1 text-xs font-medium transition-colors',
+                editorConfig.cameraView === view
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+              )}
+            >
+              {t(`sandbox.view${view.charAt(0).toUpperCase() + view.slice(1)}`)}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-paper px-2 py-1">
+          <span className="text-xs text-text-secondary">{t('sandbox.timeScale')}</span>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.1}
+            value={editorConfig.timeScale}
+            onChange={(e) => setEditorConfig({ timeScale: Number(e.target.value) })}
+            className="h-1.5 w-16 cursor-pointer appearance-none rounded-full bg-paper-tertiary accent-accent"
+          />
+          <span className="w-8 text-right text-xs font-mono text-text-secondary">
+            {editorConfig.timeScale.toFixed(1)}x
+          </span>
+        </div>
+
+        <Divider />
+
+        {/* Joint creation */}
+        <div className="relative" ref={jointMenuRef}>
+          <ToolButton
+            icon={Link2}
+            onClick={() => canCreateJoint && setShowJointMenu((s) => !s)}
+            title={canCreateJoint ? t('sandbox.createJoint') : t('sandbox.createJointHint')}
+            disabled={!canCreateJoint}
+          />
+          {showJointMenu && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-32 rounded-lg border border-border bg-paper py-1 shadow-lg">
+              {JOINT_TYPES.map(({ type, labelKey }) => (
                 <button
-                  key={mode}
+                  key={type}
                   type="button"
-                  onClick={() => setEditorConfig({ gizmoMode: mode })}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors',
-                    gizmoMode === mode
-                      ? 'bg-accent-soft text-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                  )}
+                  onClick={() => handleCreateJoint(type)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
                 >
+                  <Link2 className="h-3 w-3" />
                   {t(labelKey)}
                 </button>
               ))}
             </div>
           )}
+        </div>
 
-          <Button
-            size="sm"
-            variant={editorConfig.snapEnabled ? 'secondary' : 'outline'}
-            onClick={() => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled })}
-            title={t('sandbox.snap')}
-            leftIcon={<Magnet className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.snap')}
-          </Button>
+        <ToolButton
+          icon={Copy}
+          onClick={() => selectedId && duplicateItem(selectedId)}
+          title={t('sandbox.duplicate')}
+          disabled={!selectedId}
+        />
+        <ToolButton
+          icon={Trash2}
+          onClick={() => selectedId && removeItem(selectedId)}
+          title={t('sandbox.delete')}
+          disabled={!selectedId}
+        />
+        <ToolButton
+          icon={Eraser}
+          onClick={handleClear}
+          title={t('sandbox.clear')}
+          disabled={items.length === 0}
+        />
+        <ToolButton icon={RotateCcw} onClick={resetScene} title={t('sandbox.reset')} />
+        <ToolButton
+          icon={Camera}
+          onClick={() => setCameraResetKey((k) => k + 1)}
+          title={t('sandbox.cameraReset')}
+        />
+        <ToolButton icon={Download} onClick={handleExport} title={t('sandbox.export')} />
+        <ToolButton icon={Upload} onClick={handleImportClick} title={t('sandbox.import')} />
 
-          <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
-            <Camera className="ml-2 mr-1 h-3.5 w-3.5 text-text-tertiary" />
-            {CAMERA_VIEWS.map((view) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => setEditorConfig({ cameraView: view })}
-                className={cn(
-                  'rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors',
-                  editorConfig.cameraView === view
-                    ? 'bg-accent-soft text-accent'
-                    : 'text-text-secondary hover:text-text-primary'
-                )}
-              >
-                {t(`sandbox.view${view.charAt(0).toUpperCase() + view.slice(1)}`)}
-              </button>
-            ))}
-          </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
 
-          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-paper px-2 py-1">
-            <Timer className="h-3.5 w-3.5 text-text-tertiary" />
-            <span className="text-xs text-text-secondary">{t('sandbox.timeScale')}</span>
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={editorConfig.timeScale}
-              onChange={(e) => setEditorConfig({ timeScale: Number(e.target.value) })}
-              className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-paper-tertiary accent-accent"
-            />
-            <span className="w-10 text-right text-xs font-mono text-text-secondary">
-              {editorConfig.timeScale.toFixed(1)}x
-            </span>
-          </div>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => selectedId && duplicateItem(selectedId)}
-            disabled={!selectedId}
-            leftIcon={<Copy className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.duplicate')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => selectedId && removeItem(selectedId)}
-            disabled={!selectedId}
-            leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.delete')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleClear}
-            disabled={items.length === 0}
-            leftIcon={<Eraser className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.clear')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={resetScene}
-            leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.reset')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCameraResetKey((k) => k + 1)}
-            title={t('sandbox.cameraReset')}
-            leftIcon={<Camera className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.cameraReset')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleExport}
-            leftIcon={<Download className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.export')}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleImportClick}
-            leftIcon={<Upload className="h-3.5 w-3.5" />}
-          >
-            {t('sandbox.import')}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            onChange={handleFileChange}
-            className="hidden"
+        <div className="ml-auto flex items-center gap-1">
+          {!isFullscreen && (
+            <>
+              <ToolButton
+                icon={leftOpen ? PanelLeftClose : PanelLeftOpen}
+                onClick={() => setUI({ isLeftPanelOpen: !leftOpen })}
+                title={leftOpen ? t('sandbox.hidePalette') : t('sandbox.showPalette')}
+              />
+              <ToolButton
+                icon={rightOpen ? PanelRightClose : PanelRightOpen}
+                onClick={() => setUI({ isRightPanelOpen: !rightOpen })}
+                title={rightOpen ? t('sandbox.hideProperties') : t('sandbox.showProperties')}
+              />
+            </>
+          )}
+          <ToolButton
+            icon={isFullscreen ? Minimize2 : Maximize2}
+            onClick={() => setUI({ isFullscreen: !isFullscreen })}
+            title={isFullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
+            active={isFullscreen}
           />
         </div>
       </div>
 
-      <div className="flex h-[72vh] gap-4">
-        <div className="hidden w-56 flex-shrink-0 lg:block">
-          <EquipmentPalette />
+      {/* Status bar */}
+      {!isFullscreen && (
+        <div className="mb-2 flex items-center gap-3 px-1 text-xs text-text-tertiary">
+          <span className="flex items-center gap-1">
+            <BoxIcon className="h-3 w-3" />
+            {items.length} {t('sandbox.objects')}
+          </span>
+          {joints.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Link2 className="h-3 w-3" />
+              {joints.length} {t('sandbox.joints')}
+            </span>
+          )}
+          {selectedId && (
+            <span className="rounded bg-accent-soft px-1.5 py-0.5 text-accent">
+              {t('sandbox.selected')}: {friendlyName}
+            </span>
+          )}
         </div>
+      )}
+
+      <div className={cn('flex gap-2', canvasHeight)}>
+        {leftOpen && !isFullscreen && (
+          <div className="w-52 flex-shrink-0">
+            <EquipmentPalette />
+          </div>
+        )}
 
         <div
-          ref={canvasContainerRef}
           className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
           data-sandbox-canvas
         >
           <Scene
-            cameraPosition={[8, 6, 8]}
+            cameraPosition={[10, 8, 10]}
             cameraView={editorConfig.cameraView}
             cameraResetKey={cameraResetKey}
             showGrid
@@ -330,7 +463,8 @@ export function Sandbox() {
               autoStep={isRunning}
               timeScale={editorConfig.timeScale}
             >
-              <LabTable position={[0, 0, 0]} size={[6, 4]} height={0.8} />
+              <DeselectOnEmpty onSelect={() => selectItem(null)} />
+              <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
               <SandboxJoints />
               {items.map((item) => (
                 <SandboxItemRenderer
@@ -346,10 +480,8 @@ export function Sandbox() {
                   angleSnapSize={editorConfig.angleSnapSize}
                   onClick={(e) => {
                     e.stopPropagation()
-                    selectItem(
-                      item.id,
-                      (e.nativeEvent as MouseEvent).ctrlKey || (e.nativeEvent as MouseEvent).metaKey
-                    )
+                    const native = e.nativeEvent as MouseEvent
+                    selectItem(item.id, native.ctrlKey || native.metaKey || native.shiftKey)
                   }}
                   onChange={(patch) => updateItem(item.id, patch)}
                   onCommit={(patch) => {
@@ -365,6 +497,12 @@ export function Sandbox() {
             <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-paper/95 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm">
               <Check className="h-3.5 w-3.5 text-green-500" />
               {t('sandbox.saved')}
+            </div>
+          )}
+
+          {!isRunning && (
+            <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
+              {t('sandbox.pausedMode')}
             </div>
           )}
 
@@ -386,24 +524,66 @@ export function Sandbox() {
               <p className="rounded-lg border border-border bg-paper/90 px-4 py-2 text-sm text-text-tertiary shadow-sm">
                 {t('sandbox.empty')}
               </p>
-              <p className="rounded-lg border border-border bg-paper/80 px-4 py-2 text-xs text-text-tertiary/70 shadow-sm max-w-md text-center">
+              <p className="max-w-md rounded-lg border border-border bg-paper/80 px-4 py-2 text-center text-xs text-text-tertiary/70 shadow-sm">
                 {t('sandbox.shortcuts')}
               </p>
             </div>
           )}
+
+          {isFullscreen && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-paper/90 px-3 py-1 text-xs text-text-tertiary shadow-sm">
+              {t('sandbox.fullscreenHint')}
+            </div>
+          )}
         </div>
 
-        <div className="hidden w-64 flex-shrink-0 md:block">
-          <PropertiesPanel />
-        </div>
-      </div>
-
-      <div className="mt-4 lg:hidden">
-        <EquipmentPalette />
-      </div>
-      <div className="mt-4 md:hidden">
-        <PropertiesPanel />
+        {rightOpen && !isFullscreen && (
+          <div className="w-64 flex-shrink-0">
+            <PropertiesPanel />
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+interface ToolButtonProps {
+  icon: typeof Undo2
+  onClick: () => void
+  title: string
+  active?: boolean
+  disabled?: boolean
+  size?: 'sm' | 'md'
+}
+
+function ToolButton({
+  icon: Icon,
+  onClick,
+  title,
+  active,
+  disabled,
+  size = 'md',
+}: ToolButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        'flex items-center justify-center rounded-lg border transition-colors',
+        size === 'sm' ? 'h-7 w-7' : 'h-8 w-8',
+        active
+          ? 'border-accent bg-accent-soft text-accent'
+          : 'border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary',
+        disabled && 'cursor-not-allowed opacity-40 hover:border-border hover:text-text-secondary'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
+function Divider() {
+  return <div className="h-5 w-px bg-border" />
 }

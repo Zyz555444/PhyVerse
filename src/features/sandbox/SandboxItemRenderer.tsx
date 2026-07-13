@@ -202,7 +202,7 @@ export function SandboxItemRenderer({
 
   const geometry = useMemo(() => getVisualGeometry(item.shape, item.size), [item.shape, item.size])
 
-  // Create or recreate the physics body when structural properties change.
+  // Create or recreate the physics body only when STRUCTURAL properties change.
   const {
     id: itemId,
     shape: itemShape,
@@ -245,18 +245,19 @@ export function SandboxItemRenderer({
         bodyRef.current = null
       }
     }
-  }, [
-    world,
-    itemId,
-    itemShape,
-    itemSize,
-    itemScale,
-    itemIsDynamic,
-    itemMass,
-    itemFriction,
-    itemRestitution,
-  ])
+  }, [world, itemId, itemShape, itemSize, itemScale, itemIsDynamic])
   /* eslint-enable react-hooks/exhaustive-deps */
+
+  // Update physics material properties in place — no body recreation.
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    body.collider.setFriction(itemFriction)
+    body.collider.setRestitution(itemRestitution)
+    if (itemMass > 0) {
+      body.collider.setMass(itemMass)
+    }
+  }, [itemFriction, itemRestitution, itemMass])
 
   // Toggle kinematic/dynamic without recreating the body.
   useEffect(() => {

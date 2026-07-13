@@ -1,18 +1,42 @@
 import { useMemo, useRef, useState } from 'react'
-import { Trash2, Copy, RotateCcw } from 'lucide-react'
+import { Trash2, Copy, RotateCcw, Link2 } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Slider } from '@/shared/ui/Slider'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
-import { useSandboxStore, type SandboxItem, type SandboxCameraView } from './sandboxStore'
+import {
+  useSandboxStore,
+  type SandboxItem,
+  type SandboxCameraView,
+  type SandboxJoint,
+} from './sandboxStore'
 
 const MATERIALS = ['metal', 'plastic', 'glass', 'wood', 'rubber', 'paper'] as const
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
 
+const SHAPE_LABELS_ZH: Record<string, string> = {
+  box: '长方体',
+  sphere: '球体',
+  cylinder: '圆柱',
+  capsule: '胶囊',
+  cone: '圆锥',
+  plane: '平面',
+  torus: '圆环',
+  spring: '弹簧',
+}
+
+function getFriendlyName(items: SandboxItem[], id: string): string {
+  const item = items.find((it) => it.id === id)
+  if (!item) return id.slice(0, 8)
+  const idx = items.filter((it) => it.shape === item.shape).indexOf(item)
+  return `${SHAPE_LABELS_ZH[item.shape] ?? item.shape} ${idx + 1}`
+}
+
 export function PropertiesPanel() {
   const { t } = useI18n()
   const items = useSandboxStore((s) => s.items)
+  const joints = useSandboxStore((s) => s.joints)
   const selectedId = useSandboxStore((s) => s.selectedId)
   const gravity = useSandboxStore((s) => s.gravity)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
@@ -22,6 +46,7 @@ export function PropertiesPanel() {
   const duplicateItem = useSandboxStore((s) => s.duplicateItem)
   const setGravity = useSandboxStore((s) => s.setGravity)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
+  const removeJoint = useSandboxStore((s) => s.removeJoint)
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
@@ -139,17 +164,73 @@ export function PropertiesPanel() {
         </div>
       </section>
 
+      {joints.length > 0 && (
+        <section className="mb-5 border-t border-border pt-4">
+          <h4 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+            <Link2 className="h-3 w-3" />
+            {t('sandbox.joints')} ({joints.length})
+          </h4>
+          <div className="space-y-1.5">
+            {joints.map((joint) => (
+              <JointListItem
+                key={joint.id}
+                joint={joint}
+                items={items}
+                onRemove={() => removeJoint(joint.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {!selectedItem ? (
         <p className="text-sm text-text-tertiary">{t('sandbox.selectHint')}</p>
       ) : (
         <SelectedItemProperties
           item={selectedItem}
+          friendlyName={getFriendlyName(items, selectedItem.id)}
           onChange={(patch) => updateItem(selectedItem.id, patch)}
           onCommit={(patch) => updateItemAndCommit(selectedItem.id, patch)}
           onRemove={() => removeItem(selectedItem.id)}
           onDuplicate={() => duplicateItem(selectedItem.id)}
         />
       )}
+    </div>
+  )
+}
+
+interface JointListItemProps {
+  joint: SandboxJoint
+  items: SandboxItem[]
+  onRemove: () => void
+}
+
+function JointListItem({ joint, items, onRemove }: JointListItemProps) {
+  const { t } = useI18n()
+  const typeLabels: Record<string, string> = {
+    spring: t('sandbox.shape.spring'),
+    rope: t('sandbox.jointRope'),
+    fixed: t('sandbox.jointFixed'),
+  }
+  return (
+    <div className="flex items-center justify-between rounded-md border border-border bg-paper px-2 py-1.5 text-xs">
+      <div className="flex items-center gap-1.5 overflow-hidden">
+        <Link2 className="h-3 w-3 shrink-0 text-text-tertiary" />
+        <span className="shrink-0 font-medium text-text-secondary">
+          {typeLabels[joint.type] ?? joint.type}
+        </span>
+        <span className="truncate text-text-tertiary">
+          {getFriendlyName(items, joint.bodyA)} ↔ {getFriendlyName(items, joint.bodyB)}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded p-0.5 text-text-tertiary hover:text-red-500"
+        title={t('sandbox.delete')}
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
     </div>
   )
 }
@@ -239,6 +320,7 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
 
 interface SelectedItemPropertiesProps {
   item: SandboxItem
+  friendlyName: string
   onChange: (patch: Partial<SandboxItem>) => void
   onCommit: (patch: Partial<SandboxItem>) => void
   onRemove: () => void
@@ -247,6 +329,7 @@ interface SelectedItemPropertiesProps {
 
 function SelectedItemProperties({
   item,
+  friendlyName,
   onChange,
   onCommit,
   onRemove,
@@ -261,9 +344,11 @@ function SelectedItemProperties({
           className="max-w-[70%] truncate rounded bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
           title={item.id}
         >
-          {item.id}
+          {friendlyName}
         </span>
-        <span className="text-xs capitalize text-text-tertiary">{item.shape}</span>
+        <span className="text-xs capitalize text-text-tertiary">
+          {t(`sandbox.shape.${item.shape}`)}
+        </span>
       </div>
 
       <Vector3Group

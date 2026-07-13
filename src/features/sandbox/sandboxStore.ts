@@ -58,6 +58,12 @@ interface HistoryState {
   future: SandboxScene[]
 }
 
+interface SandboxUIState {
+  isFullscreen: boolean
+  isLeftPanelOpen: boolean
+  isRightPanelOpen: boolean
+}
+
 interface SandboxState extends SandboxScene {
   selectedId: string | null
   multiSelectedIds: string[]
@@ -66,6 +72,9 @@ interface SandboxState extends SandboxScene {
   clipboard: SandboxItem[] | null
   joints: SandboxJoint[]
   isGizmoDragging: boolean
+  ui: SandboxUIState
+  /** Captures scene state before a no-history drag for correct undo. */
+  pendingHistorySnapshot: SandboxScene | null
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -84,6 +93,11 @@ interface SandboxState extends SandboxScene {
   redo: () => void
   setEditorConfig: (patch: Partial<SandboxEditorConfig>) => void
   setGizmoDragging: (dragging: boolean) => void
+  addJoint: (joint: Omit<SandboxJoint, 'id'>) => string
+  removeJoint: (id: string) => void
+  updateJoint: (id: string, patch: Partial<SandboxJoint>) => void
+  setUI: (patch: Partial<SandboxUIState>) => void
+  getFriendlyName: (id: string) => string
 }
 
 const DEFAULT_COLORS: Record<SandboxShape, string> = {
@@ -162,16 +176,7 @@ function pushHistory(
   }
 }
 
-function commitHistoryState(
-  state: Pick<SandboxState, 'items' | 'gravity' | 'joints' | 'history'>
-): HistoryState {
-  return {
-    past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
-    future: [],
-  }
-}
-
-export const useSandboxStore = create<SandboxState>((set) => ({
+export const useSandboxStore = create<SandboxState>((set, get) => ({
   items: [],
   joints: [],
   selectedId: null,
@@ -181,6 +186,8 @@ export const useSandboxStore = create<SandboxState>((set) => ({
   editorConfig: DEFAULT_EDITOR_CONFIG,
   clipboard: null,
   isGizmoDragging: false,
+  ui: { isFullscreen: false, isLeftPanelOpen: true, isRightPanelOpen: true },
+  pendingHistorySnapshot: null,
 
   addItem: (shape, position) =>
     set((state) => {
@@ -188,6 +195,7 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       return {
         items: [...state.items, newItem],
         selectedId: newItem.id,
+        multiSelectedIds: [],
         history: pushHistory(state),
       }
     }),
@@ -226,7 +234,11 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       if (nextItems.every((item, idx) => item === state.items[idx])) {
         return state
       }
-      return { items: nextItems }
+      // Capture pre-change snapshot on first update of a drag batch for correct undo.
+      return {
+        items: nextItems,
+        pendingHistorySnapshot: state.pendingHistorySnapshot ?? snapshot(state),
+      }
     }),
 
   updateItemAndCommit: (id, patch) =>
@@ -235,16 +247,24 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       if (nextItems.every((item, idx) => item === state.items[idx])) {
         return state
       }
+      // Push OLD state so undo restores pre-change values.
       return {
         items: nextItems,
-        history: pushHistory({ ...state, items: nextItems }),
+        history: pushHistory(state),
       }
     }),
 
   commitHistory: () =>
-    set((state) => ({
-      history: commitHistoryState(state),
-    })),
+    set((state) => {
+      if (!state.pendingHistorySnapshot) return state
+      return {
+        pendingHistorySnapshot: null,
+        history: {
+          past: [...state.history.past, state.pendingHistorySnapshot].slice(-HISTORY_LIMIT),
+          future: [],
+        },
+      }
+    }),
 
   duplicateItem: (id) =>
     set((state) => {
@@ -333,10 +353,7 @@ export const useSandboxStore = create<SandboxState>((set) => ({
       gravity: scene.gravity,
       selectedId: null,
       multiSelectedIds: [],
-      history: {
-        past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
-        future: [],
-      },
+      history: pushHistory(state),
     })),
 
   undo: () =>
@@ -350,6 +367,7 @@ export const useSandboxStore = create<SandboxState>((set) => ({
         gravity: previous.gravity,
         selectedId: null,
         multiSelectedIds: [],
+        pendingHistorySnapshot: null,
         history: {
           past: newPast,
           future: [snapshot(state), ...state.history.future].slice(-HISTORY_LIMIT),
@@ -367,6 +385,7 @@ export const useSandboxStore = create<SandboxState>((set) => ({
         gravity: next.gravity,
         selectedId: null,
         multiSelectedIds: [],
+        pendingHistorySnapshot: null,
         history: {
           past: [...state.history.past, snapshot(state)].slice(-HISTORY_LIMIT),
           future: state.history.future.slice(1),
@@ -383,4 +402,52 @@ export const useSandboxStore = create<SandboxState>((set) => ({
     set(() => ({
       isGizmoDragging: dragging,
     })),
+
+  addJoint: (joint) => {
+    const id = generateId()
+    set((state) => ({
+      joints: [...state.joints, { ...joint, id }],
+      history: pushHistory(state),
+    }))
+    return id
+  },
+
+  removeJoint: (jid) =>
+    set((state) => ({
+      joints: state.joints.filter((j) => j.id !== jid),
+      history: pushHistory(state),
+    })),
+
+  updateJoint: (jid, patch) =>
+    set((state) => {
+      const nextJoints = state.joints.map((j) => (j.id === jid ? { ...j, ...patch } : j))
+      if (nextJoints.every((j, idx) => j === state.joints[idx])) return state
+      return {
+        joints: nextJoints,
+        history: pushHistory(state),
+      }
+    }),
+
+  setUI: (patch) =>
+    set((state) => ({
+      ui: { ...state.ui, ...patch },
+    })),
+
+  getFriendlyName: (id) => {
+    const state = get()
+    const item = state.items.find((it) => it.id === id)
+    if (!item) return id.slice(0, 8)
+    const shapeNames: Record<SandboxShape, string> = {
+      box: '长方体',
+      sphere: '球体',
+      cylinder: '圆柱',
+      capsule: '胶囊',
+      cone: '圆锥',
+      plane: '平面',
+      torus: '圆环',
+      spring: '弹簧',
+    }
+    const idx = state.items.filter((it) => it.shape === item.shape).indexOf(item)
+    return `${shapeNames[item.shape]} ${idx + 1}`
+  },
 }))

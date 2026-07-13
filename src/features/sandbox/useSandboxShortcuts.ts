@@ -14,6 +14,7 @@ interface SandboxShortcuts {
   onCopy?: () => void
   onPaste?: () => void
   onToggleSnap?: () => void
+  onToggleFullscreen?: () => void
   isGizmoActive?: () => boolean
   hasSelection?: boolean
 }
@@ -29,6 +30,7 @@ export function useSandboxShortcuts({
   onCopy,
   onPaste,
   onToggleSnap,
+  onToggleFullscreen,
   isGizmoActive,
   hasSelection,
 }: SandboxShortcuts): void {
@@ -123,6 +125,13 @@ export function useSandboxShortcuts({
         return
       }
 
+      // Fullscreen toggle (F)
+      if (event.key.toLowerCase() === 'f' && onToggleFullscreen && !isMod) {
+        event.preventDefault()
+        onToggleFullscreen()
+        return
+      }
+
       // Delete
       if ((event.key === 'Delete' || event.key === 'Backspace') && hasSelection) {
         event.preventDefault()
@@ -144,6 +153,7 @@ export function useSandboxShortcuts({
     onCopy,
     onPaste,
     onToggleSnap,
+    onToggleFullscreen,
     isGizmoActive,
     hasSelection,
   ])
