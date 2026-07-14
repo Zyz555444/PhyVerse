@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
 import type { PhysicsWorld } from '@/features/physics/PhysicsWorld'
@@ -18,6 +18,9 @@ interface SandboxItemRendererProps {
   snapSize: number
   angleSnapEnabled: boolean
   angleSnapSize: number
+  impulseMode: boolean
+  impulseStrength: number
+  showTrajectory: boolean
   onClick: (e: ThreeEvent<MouseEvent>) => void
   onChange: (patch: Partial<SandboxItem>) => void
   onCommit: (patch: Partial<SandboxItem>) => void
@@ -29,6 +32,8 @@ interface ShapeGeometry {
 }
 
 const SELECTION_COLOR = '#f59e0b'
+const TRAJECTORY_MAX_POINTS = 300
+const TRAJECTORY_SAMPLE_INTERVAL = 2
 
 function toQuaternion(euler: [number, number, number]): [number, number, number, number] {
   const q = new THREE.Quaternion()
@@ -142,6 +147,12 @@ function SelectionOutline({
     }
   }, [shape, size, scale])
 
+  useEffect(() => {
+    return () => {
+      geometry.dispose()
+    }
+  }, [geometry])
+
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color="#f59e0b" transparent opacity={0.8} />
@@ -165,7 +176,72 @@ function SpringGeometry({ radius, height }: { radius: number; height: number }) 
     return new THREE.TubeGeometry(curve, segments, wireThickness, 8, false)
   }, [radius, height])
 
+  useEffect(() => {
+    return () => {
+      geometry.dispose()
+    }
+  }, [geometry])
+
   return <primitive attach="geometry" object={geometry} />
+}
+
+function TrajectoryLine({ bodyRef, active }: { bodyRef: React.MutableRefObject<ReturnType<PhysicsWorld['getBody']> | null>; active: boolean }) {
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    const positions = new Float32Array(TRAJECTORY_MAX_POINTS * 3)
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setDrawRange(0, 0)
+    return geo
+  }, [])
+
+  const countRef = useRef(0)
+  const frameCounterRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose()
+    }
+  }, [geometry])
+
+  useEffect(() => {
+    if (!active) {
+      countRef.current = 0
+      geometry.setDrawRange(0, 0)
+      const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+      attr.needsUpdate = true
+    }
+  }, [active, geometry])
+
+  useFrame(() => {
+    if (!active) return
+    const body = bodyRef.current
+    if (!body) return
+    frameCounterRef.current += 1
+    if (frameCounterRef.current % TRAJECTORY_SAMPLE_INTERVAL !== 0) return
+    const pos = body.rigidBody.translation()
+    const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+    const positions = attr.array as Float32Array
+    if (countRef.current >= TRAJECTORY_MAX_POINTS) {
+      // Shift left by one point (3 floats) to make room.
+      positions.copyWithin(0, 3, TRAJECTORY_MAX_POINTS * 3)
+      countRef.current = TRAJECTORY_MAX_POINTS - 1
+    }
+    const idx = countRef.current * 3
+    positions[idx] = pos.x
+    positions[idx + 1] = pos.y
+    positions[idx + 2] = pos.z
+    countRef.current += 1
+    attr.needsUpdate = true
+    geometry.setDrawRange(0, countRef.current)
+    geometry.computeBoundingSphere()
+  })
+
+  return (
+    <line>
+      <primitive object={geometry} attach="geometry" />
+      <lineBasicMaterial color="#f59e0b" linewidth={2} />
+    </line>
+  )
 }
 
 export function SandboxItemRenderer({
@@ -178,11 +254,15 @@ export function SandboxItemRenderer({
   snapSize,
   angleSnapEnabled,
   angleSnapSize,
+  impulseMode,
+  impulseStrength,
+  showTrajectory,
   onClick,
   onChange,
   onCommit,
 }: SandboxItemRendererProps) {
   const { world } = usePhysics()
+  const { camera } = useThree()
   const meshRef = useRef<THREE.Mesh>(null)
   const [mesh, setMesh] = useState<THREE.Mesh | null>(null)
   const bodyRef = useRef<ReturnType<PhysicsWorld['getBody']> | null>(null)
@@ -199,6 +279,12 @@ export function SandboxItemRenderer({
       }),
     [item.material, item.color, selected, multiSelected]
   )
+
+  useEffect(() => {
+    return () => {
+      material.dispose()
+    }
+  }, [material])
 
   const geometry = useMemo(() => getVisualGeometry(item.shape, item.size), [item.shape, item.size])
 
@@ -270,7 +356,9 @@ export function SandboxItemRenderer({
     }
   }, [editingEnabled, itemIsDynamic])
 
-  // Sync body transform from store when position/rotation/scale change
+  // Sync body transform (and mesh, when editing) from store. Fires only when
+  // item.position/rotation/scale actually change, so it never fights the
+  // running-mode useFrame that writes body→mesh.
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return
@@ -281,7 +369,16 @@ export function SandboxItemRenderer({
     )
     const q = toQuaternion(item.rotation)
     body.rigidBody.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, true)
-  }, [item.id, item.position, item.rotation, item.scale])
+
+    if (editingEnabled) {
+      const meshNode = meshRef.current
+      if (meshNode) {
+        meshNode.position.set(item.position[0], item.position[1], item.position[2])
+        meshNode.quaternion.set(q[0], q[1], q[2], q[3])
+        meshNode.scale.set(item.scale[0], item.scale[1], item.scale[2])
+      }
+    }
+  }, [item.id, item.position, item.rotation, item.scale, editingEnabled])
 
   // Each frame: running -> read physics to mesh; editing -> write mesh to kinematic body.
   useFrame(() => {
@@ -314,9 +411,35 @@ export function SandboxItemRenderer({
     }
   })
 
+  // Apply impulse on click when impulse mode is active (run mode only).
+  const handleClick = useCallback(
+    (e: ThreeEvent<MouseEvent>) => {
+      if (impulseMode && !editingEnabled) {
+        e.stopPropagation()
+        const body = bodyRef.current
+        if (!body) return
+        const rb = body.rigidBody
+        if (rb.bodyType() !== 0) return // only dynamic bodies respond
+        const dir = new THREE.Vector3()
+        camera.getWorldDirection(dir)
+        dir.multiplyScalar(impulseStrength)
+        rb.applyImpulse({ x: dir.x, y: dir.y, z: dir.z }, true)
+        return
+      }
+      onClick(e)
+    },
+    [impulseMode, editingEnabled, impulseStrength, camera, onClick]
+  )
+
+  // Hidden items are not rendered and do not participate in physics clicks.
+  if (item.hidden) return null
+
+  const gizmoEnabled = selected && editingEnabled && !item.locked
+  const trajectoryActive = !!showTrajectory && selected && !editingEnabled
+
   return (
     <>
-      <mesh ref={setMeshRef} material={material} onClick={onClick} castShadow receiveShadow>
+      <mesh ref={setMeshRef} material={material} onClick={handleClick} castShadow receiveShadow>
         {geometry.type === 'box' && (
           <boxGeometry args={geometry.args as [number, number, number]} />
         )}
@@ -353,8 +476,9 @@ export function SandboxItemRenderer({
         angleSnapSize={angleSnapSize}
         onChange={onChange}
         onCommit={onCommit}
-        enabled={selected && editingEnabled}
+        enabled={gizmoEnabled}
       />
+      {trajectoryActive && <TrajectoryLine bodyRef={bodyRef} active={trajectoryActive} />}
     </>
   )
 }

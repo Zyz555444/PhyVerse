@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
@@ -7,7 +7,7 @@ import {
   createFixedJoint,
   createRopeJoint,
 } from '@/features/physics/JointFactory'
-import { useSandboxStore, type SandboxJoint } from './sandboxStore'
+import { useSandboxStore, type SandboxJoint, type JointType } from './sandboxStore'
 
 function createJoint(
   world: NonNullable<ReturnType<typeof usePhysics>['world']>,
@@ -55,12 +55,42 @@ function createJoint(
   }
 }
 
-function SpringLine({ joint }: { joint: SandboxJoint }) {
+const JOINT_STYLE: Record<JointType, { color: string; dashed: boolean; opacity: number }> = {
+  spring: { color: '#9b9b9b', dashed: true, opacity: 0.85 },
+  rope: { color: '#a16207', dashed: false, opacity: 0.9 },
+  fixed: { color: '#2563eb', dashed: true, opacity: 0.7 },
+}
+
+function JointLine({ joint }: { joint: SandboxJoint }) {
   const { world } = usePhysics()
-  const lineRef = useRef<THREE.Line>(null)
+  const lineRef = useRef<THREE.LineSegments>(null)
+  const style = JOINT_STYLE[joint.type]
+
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3))
+    return geo
+  }, [])
+
+  const material = useMemo(() => {
+    return new THREE.LineDashedMaterial({
+      color: style.color,
+      transparent: true,
+      opacity: style.opacity,
+      dashSize: style.dashed ? 0.15 : 0.001,
+      gapSize: style.dashed ? 0.1 : 0.0005,
+    })
+  }, [style.color, style.dashed, style.opacity])
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose()
+      material.dispose()
+    }
+  }, [geometry, material])
 
   useFrame(() => {
-    if (!world || !world.isReady || !lineRef.current) return
+    if (!world || !world.isReady) return
     const bodyA = world.getBody(joint.bodyA)
     const bodyB = world.getBody(joint.bodyB)
     if (!bodyA || !bodyB) return
@@ -71,74 +101,116 @@ function SpringLine({ joint }: { joint: SandboxJoint }) {
     const anchorA = joint.anchorA ?? [0, 0, 0]
     const anchorB = joint.anchorB ?? [0, 0, 0]
 
-    const points = [
-      new THREE.Vector3(posA.x + anchorA[0], posA.y + anchorA[1], posA.z + anchorA[2]),
-      new THREE.Vector3(posB.x + anchorB[0], posB.y + anchorB[1], posB.z + anchorB[2]),
-    ]
+    const ax = posA.x + anchorA[0]
+    const ay = posA.y + anchorA[1]
+    const az = posA.z + anchorA[2]
+    const bx = posB.x + anchorB[0]
+    const by = posB.y + anchorB[1]
+    const bz = posB.z + anchorB[2]
 
-    const geom = new THREE.BufferGeometry().setFromPoints(points)
-    lineRef.current.geometry.dispose()
-    lineRef.current.geometry = geom
+    const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+    const arr = attr.array as Float32Array
+    arr[0] = ax
+    arr[1] = ay
+    arr[2] = az
+    arr[3] = bx
+    arr[4] = by
+    arr[5] = bz
+    attr.needsUpdate = true
+    geometry.computeBoundingSphere()
+    // LineDashedMaterial requires distance calculations to render dashes.
+    lineRef.current?.computeLineDistances()
   })
 
-  return (
-    <lineSegments ref={lineRef}>
-      <lineBasicMaterial color="#9b9b9b" linewidth={2} />
-    </lineSegments>
-  )
+  return <lineSegments ref={lineRef} geometry={geometry} material={material} />
+}
+
+function jointSignature(joint: SandboxJoint): string {
+  const parts = [
+    joint.type,
+    joint.bodyA,
+    joint.bodyB,
+    (joint.anchorA ?? [0, 0, 0]).join(','),
+    (joint.anchorB ?? [0, 0, 0]).join(','),
+    joint.restLength ?? '',
+    joint.stiffness ?? '',
+    joint.damping ?? '',
+    joint.maxDistance ?? '',
+  ]
+  return parts.join('|')
 }
 
 export function SandboxJoints() {
   const { world } = usePhysics()
   const joints = useSandboxStore((s) => s.joints)
   const jointLabelsRef = useRef<Set<string>>(new Set())
+  const jointSignaturesRef = useRef<Map<string, string>>(new Map())
 
+  // Incremental sync: only add/remove/recreate joints that actually changed.
   useEffect(() => {
     if (!world || !world.isReady) return
 
-    const currentIds = new Set(joints.map((j) => j.id))
     const labels = jointLabelsRef.current
+    const signatures = jointSignaturesRef.current
+    const currentIds = new Set(joints.map((j) => j.id))
 
-    // Remove joints that no longer exist
-    for (const label of labels) {
+    // Remove joints that no longer exist.
+    for (const label of [...labels]) {
       if (!currentIds.has(label)) {
         world.removeJoint(label)
+        labels.delete(label)
+        signatures.delete(label)
       }
     }
 
-    // Create new joints
+    // Add or recreate joints whose signature changed.
     for (const joint of joints) {
-      if (!labels.has(joint.id)) {
-        const rapierJoint = createJoint(world, joint)
-        if (rapierJoint) {
-          try {
-            world.addJoint(joint.id, rapierJoint)
-            labels.add(joint.id)
-          } catch {
-            // Joint already exists (can happen during hot reload)
-            world.removeJoint(joint.id)
-            world.addJoint(joint.id, rapierJoint)
-            labels.add(joint.id)
-          }
+      const sig = jointSignature(joint)
+      const existingSig = signatures.get(joint.id)
+      if (existingSig === sig) continue
+
+      if (labels.has(joint.id)) {
+        // Signature changed — recreate.
+        world.removeJoint(joint.id)
+        labels.delete(joint.id)
+      }
+
+      const rapierJoint = createJoint(world, joint)
+      if (rapierJoint) {
+        try {
+          world.addJoint(joint.id, rapierJoint)
+          labels.add(joint.id)
+          signatures.set(joint.id, sig)
+        } catch {
+          // Joint already exists (can happen during hot reload)
+          world.removeJoint(joint.id)
+          world.addJoint(joint.id, rapierJoint)
+          labels.add(joint.id)
+          signatures.set(joint.id, sig)
         }
       }
     }
+  }, [world, joints])
 
+  // Unmount-only cleanup: remove all joints we created.
+  useEffect(() => {
+    const labels = jointLabelsRef.current
+    const signatures = jointSignaturesRef.current
     return () => {
+      if (!world || !world.isReady) return
       for (const label of labels) {
         world.removeJoint(label)
       }
       labels.clear()
+      signatures.clear()
     }
-  }, [world, joints])
+  }, [world])
 
   return (
     <>
-      {joints
-        .filter((j) => j.type === 'spring')
-        .map((joint) => (
-          <SpringLine key={joint.id} joint={joint} />
-        ))}
+      {joints.map((joint) => (
+        <JointLine key={joint.id} joint={joint} />
+      ))}
     </>
   )
 }

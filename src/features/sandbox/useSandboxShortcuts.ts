@@ -15,6 +15,8 @@ interface SandboxShortcuts {
   onPaste?: () => void
   onToggleSnap?: () => void
   onToggleFullscreen?: () => void
+  onToggleHelp?: () => void
+  onStep?: () => void
   isGizmoActive?: () => boolean
   hasSelection?: boolean
 }
@@ -31,6 +33,8 @@ export function useSandboxShortcuts({
   onPaste,
   onToggleSnap,
   onToggleFullscreen,
+  onToggleHelp,
+  onStep,
   isGizmoActive,
   hasSelection,
 }: SandboxShortcuts): void {
@@ -125,10 +129,25 @@ export function useSandboxShortcuts({
         return
       }
 
+      // Single-step simulation (N) — only meaningful while paused, but we
+      // forward the request and let the host decide.
+      if (event.key.toLowerCase() === 'n' && onStep && !isMod) {
+        event.preventDefault()
+        onStep()
+        return
+      }
+
       // Fullscreen toggle (F)
       if (event.key.toLowerCase() === 'f' && onToggleFullscreen && !isMod) {
         event.preventDefault()
         onToggleFullscreen()
+        return
+      }
+
+      // Help overlay (?)
+      if (event.key === '?' && onToggleHelp) {
+        event.preventDefault()
+        onToggleHelp()
         return
       }
 
@@ -154,6 +173,8 @@ export function useSandboxShortcuts({
     onPaste,
     onToggleSnap,
     onToggleFullscreen,
+    onToggleHelp,
+    onStep,
     isGizmoActive,
     hasSelection,
   ])

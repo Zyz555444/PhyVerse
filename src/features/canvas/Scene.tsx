@@ -13,6 +13,10 @@ export interface SceneProps {
   cameraView?: 'free' | 'top' | 'front' | 'side' | 'follow'
   /** Increment to force camera reset */
   cameraResetKey?: number
+  /** When set (with a fresh focusKey), the camera re-aims at this point. */
+  focusTarget?: [number, number, number]
+  /** Increment to force a re-focus even if focusTarget is unchanged. */
+  focusKey?: number
 }
 
 export function Scene({
@@ -22,6 +26,8 @@ export function Scene({
   cameraPosition = [6, 5, 6],
   cameraView = 'free',
   cameraResetKey,
+  focusTarget,
+  focusKey,
 }: SceneProps) {
   return (
     <Canvas
@@ -45,7 +51,12 @@ export function Scene({
       <Suspense fallback={null}>
         <Lighting />
         {showGrid && <Grid />}
-        <CameraController key={cameraResetKey} view={cameraView} />
+        <CameraController
+          key={cameraResetKey}
+          view={cameraView}
+          focusTarget={focusTarget}
+          focusKey={focusKey}
+        />
         {children}
       </Suspense>
     </Canvas>

@@ -11,6 +11,10 @@ export interface CameraControllerProps {
   target?: [number, number, number]
   enableDamping?: boolean
   enablePan?: boolean
+  /** When set (with a fresh focusKey), the camera re-aims at this point. */
+  focusTarget?: [number, number, number]
+  /** Increment to force a re-focus even if focusTarget is unchanged. */
+  focusKey?: number
 }
 
 const viewPositions: Record<Exclude<CameraView, 'free' | 'follow'>, [number, number, number]> = {
@@ -24,6 +28,8 @@ export function CameraController({
   target = [0, 0, 0],
   enableDamping = true,
   enablePan = true,
+  focusTarget,
+  focusKey,
 }: CameraControllerProps) {
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const { camera } = useThree()
@@ -46,6 +52,20 @@ export function CameraController({
       controlsRef.current.update()
     }
   }, [view, target, camera])
+
+  // Re-aim the camera at focusTarget when focusKey bumps.
+  useEffect(() => {
+    if (focusKey === undefined || !focusTarget) return
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+    const focusVec = new THREE.Vector3(...focusTarget)
+    // Keep the current view direction but re-center on the target. Move the
+    // camera so its offset from the target is preserved.
+    const offset = new THREE.Vector3().subVectors(camera.position, ctrl.target)
+    ctrl.target.copy(focusVec)
+    camera.position.copy(focusVec).add(offset)
+    ctrl.update()
+  }, [focusKey, focusTarget, camera])
 
   return (
     <OrbitControls

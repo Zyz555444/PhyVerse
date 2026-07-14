@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import type { MaterialPreset } from '@/features/canvas/Materials'
+import { getFriendlyName } from './friendlyName'
+
+export { getFriendlyName }
 
 export type SandboxShape =
   'box' | 'sphere' | 'cylinder' | 'capsule' | 'cone' | 'plane' | 'torus' | 'spring'
@@ -8,6 +11,8 @@ export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
 
 export type JointType = 'spring' | 'fixed' | 'rope'
+
+export type SandboxToolMode = GizmoMode | 'impulse'
 
 export interface SandboxJoint {
   id: string
@@ -35,6 +40,12 @@ export interface SandboxItem {
   mass: number
   friction: number
   restitution: number
+  /** When true, the object is hidden from the 3D view. */
+  hidden?: boolean
+  /** When true, the object cannot be moved via gizmo or transform sliders. */
+  locked?: boolean
+  /** Optional user-defined name; takes precedence over the auto-generated friendly name. */
+  displayName?: string
 }
 
 export interface SandboxScene {
@@ -51,6 +62,12 @@ export interface SandboxEditorConfig {
   timeScale: number
   cameraView: SandboxCameraView
   gizmoMode: GizmoMode
+  /** When true, clicking a body in run mode applies an impulse instead of selecting. */
+  impulseMode: boolean
+  /** Magnitude of the impulse applied in impulse mode. */
+  impulseStrength: number
+  /** When true, the selected body leaves a trajectory trail while running. */
+  showTrajectory: boolean
 }
 
 interface HistoryState {
@@ -62,6 +79,8 @@ interface SandboxUIState {
   isFullscreen: boolean
   isLeftPanelOpen: boolean
   isRightPanelOpen: boolean
+  isHierarchyPanelOpen: boolean
+  isHelpOpen: boolean
 }
 
 interface SandboxState extends SandboxScene {
@@ -75,6 +94,8 @@ interface SandboxState extends SandboxScene {
   ui: SandboxUIState
   /** Captures scene state before a no-history drag for correct undo. */
   pendingHistorySnapshot: SandboxScene | null
+  /** Monotonically increasing counter; bumping it requests a single physics step. */
+  stepRequested: number
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -97,6 +118,11 @@ interface SandboxState extends SandboxScene {
   removeJoint: (id: string) => void
   updateJoint: (id: string, patch: Partial<SandboxJoint>) => void
   setUI: (patch: Partial<SandboxUIState>) => void
+  snapToGround: (id: string) => void
+  toggleLock: (id: string) => void
+  toggleVisibility: (id: string) => void
+  setDisplayName: (id: string, name: string) => void
+  requestStep: () => void
   getFriendlyName: (id: string) => string
 }
 
@@ -139,6 +165,9 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
   timeScale: 1,
   cameraView: 'free',
   gizmoMode: 'translate',
+  impulseMode: false,
+  impulseStrength: 5,
+  showTrajectory: false,
 }
 
 function createDefaultItem(shape: SandboxShape, position?: [number, number, number]): SandboxItem {
@@ -186,8 +215,15 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   editorConfig: DEFAULT_EDITOR_CONFIG,
   clipboard: null,
   isGizmoDragging: false,
-  ui: { isFullscreen: false, isLeftPanelOpen: true, isRightPanelOpen: true },
+  ui: {
+    isFullscreen: false,
+    isLeftPanelOpen: true,
+    isRightPanelOpen: true,
+    isHierarchyPanelOpen: true,
+    isHelpOpen: false,
+  },
   pendingHistorySnapshot: null,
+  stepRequested: 0,
 
   addItem: (shape, position) =>
     set((state) => {
@@ -433,21 +469,75 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       ui: { ...state.ui, ...patch },
     })),
 
+  snapToGround: (id) =>
+    set((state) => {
+      const item = state.items.find((it) => it.id === id)
+      if (!item) return state
+      const halfHeight = getHalfHeight(item)
+      const nextPosition: [number, number, number] = [
+        item.position[0],
+        halfHeight,
+        item.position[2],
+      ]
+      const nextItems = state.items.map((it) =>
+        it.id === id ? { ...it, position: nextPosition } : it
+      )
+      return {
+        items: nextItems,
+        history: pushHistory(state),
+      }
+    }),
+
+  toggleLock: (id) =>
+    set((state) => ({
+      items: state.items.map((it) =>
+        it.id === id ? { ...it, locked: !it.locked } : it
+      ),
+      history: pushHistory(state),
+    })),
+
+  toggleVisibility: (id) =>
+    set((state) => ({
+      items: state.items.map((it) =>
+        it.id === id ? { ...it, hidden: !it.hidden } : it
+      ),
+      history: pushHistory(state),
+    })),
+
+  setDisplayName: (id, name) =>
+    set((state) => ({
+      items: state.items.map((it) =>
+        it.id === id ? { ...it, displayName: name.trim() || undefined } : it
+      ),
+      history: pushHistory(state),
+    })),
+
+  requestStep: () =>
+    set((state) => ({ stepRequested: state.stepRequested + 1 })),
+
   getFriendlyName: (id) => {
     const state = get()
-    const item = state.items.find((it) => it.id === id)
-    if (!item) return id.slice(0, 8)
-    const shapeNames: Record<SandboxShape, string> = {
-      box: '长方体',
-      sphere: '球体',
-      cylinder: '圆柱',
-      capsule: '胶囊',
-      cone: '圆锥',
-      plane: '平面',
-      torus: '圆环',
-      spring: '弹簧',
-    }
-    const idx = state.items.filter((it) => it.shape === item.shape).indexOf(item)
-    return `${shapeNames[item.shape]} ${idx + 1}`
+    return getFriendlyName(state.items, id)
   },
 }))
+
+function getHalfHeight(item: SandboxItem): number {
+  const [, sy] = item.scale
+  const [, sizeY] = item.size
+  switch (item.shape) {
+    case 'sphere':
+      return item.size[0] * item.scale[0]
+    case 'cylinder':
+    case 'capsule':
+    case 'cone':
+    case 'spring':
+    case 'box':
+      return (sizeY * sy) / 2
+    case 'torus':
+      return item.size[1] * item.scale[1]
+    case 'plane':
+      return 0.01
+    default:
+      return 0.1
+  }
+}

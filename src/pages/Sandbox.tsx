@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { Scene } from '@/features/canvas/Scene'
 import { LabTable } from '@/features/canvas/LabTable'
 import { PhysicsProvider } from '@/features/physics/PhysicsProvider'
+import { usePhysics } from '@/features/physics/usePhysics'
 import {
   useSandboxStore,
   type SandboxScene,
@@ -15,6 +16,10 @@ import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
 import { SandboxItemRenderer } from '@/features/sandbox/SandboxItemRenderer'
 import { SandboxJoints } from '@/features/sandbox/SandboxJoints'
+import { SceneHierarchyPanel } from '@/features/sandbox/SceneHierarchyPanel'
+import { HelpOverlay } from '@/features/sandbox/HelpOverlay'
+import { getFriendlyName } from '@/features/sandbox/friendlyName'
+import { SANDBOX_PRESETS } from '@/features/sandbox/presets'
 import { useSandboxShortcuts } from '@/features/sandbox/useSandboxShortcuts'
 import {
   saveScene,
@@ -46,6 +51,11 @@ import {
   Link2,
   Undo2,
   Redo2,
+  SkipForward,
+  Crosshair,
+  Zap,
+  HelpCircle,
+  Route,
   Box as BoxIcon,
 } from 'lucide-react'
 
@@ -70,6 +80,44 @@ function DeselectOnEmpty({ onSelect }: { onSelect: () => void }) {
     return () => dom.removeEventListener('pointerdown', handler)
   }, [gl, onSelect])
   return null
+}
+
+function ManualStepper() {
+  const { world } = usePhysics()
+  const stepRequested = useSandboxStore((s) => s.stepRequested)
+  const lastSeenRef = useRef(stepRequested)
+
+  useFrame(() => {
+    if (stepRequested !== lastSeenRef.current) {
+      lastSeenRef.current = stepRequested
+      if (world && world.isReady) {
+        world.step()
+      }
+    }
+  })
+  return null
+}
+
+function useFps(): number {
+  const [fps, setFps] = useState(0)
+  useEffect(() => {
+    let frames = 0
+    let raf = 0
+    let last = performance.now()
+    const tick = () => {
+      frames++
+      const now = performance.now()
+      if (now - last >= 1000) {
+        setFps(frames)
+        frames = 0
+        last = now
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  return fps
 }
 
 export function Sandbox() {
@@ -97,15 +145,24 @@ export function Sandbox() {
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
   const setUI = useSandboxStore((s) => s.setUI)
   const addJoint = useSandboxStore((s) => s.addJoint)
+  const requestStep = useSandboxStore((s) => s.requestStep)
 
   const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [cameraResetKey, setCameraResetKey] = useState(0)
   const [showJointMenu, setShowJointMenu] = useState(false)
+  const [cameraFocusKey, setCameraFocusKey] = useState(0)
+  const [showPresetMenu, setShowPresetMenu] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jointMenuRef = useRef<HTMLDivElement>(null)
+  const presetMenuRef = useRef<HTMLDivElement>(null)
+
+  const impulseMode = editorConfig.impulseMode
+  const impulseStrength = editorConfig.impulseStrength
+  const showTrajectory = editorConfig.showTrajectory
+  const fps = useFps()
 
   useEffect(() => {
     const stored = loadStoredScene()
@@ -140,6 +197,17 @@ export function Sandbox() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showJointMenu])
 
+  useEffect(() => {
+    if (!showPresetMenu) return
+    const handler = (e: MouseEvent) => {
+      if (presetMenuRef.current && !presetMenuRef.current.contains(e.target as Node)) {
+        setShowPresetMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showPresetMenu])
+
   useSandboxShortcuts({
     onRunToggle: () => setIsRunning((r) => !r),
     onDelete: () => {
@@ -158,6 +226,8 @@ export function Sandbox() {
     onPaste: () => pasteItem(),
     onToggleSnap: () => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled }),
     onToggleFullscreen: () => setUI({ isFullscreen: !ui.isFullscreen }),
+    onToggleHelp: () => setUI({ isHelpOpen: !ui.isHelpOpen }),
+    onStep: () => requestStep(),
     isGizmoActive: () => isGizmoDragging,
     hasSelection: !!selectedId,
   })
@@ -207,23 +277,16 @@ export function Sandbox() {
 
   const canCreateJoint = [selectedId, ...multiSelectedIds].filter(Boolean).length >= 2
 
-  const friendlyName = useSandboxStore((s) => {
+  const friendlyName = useMemo(() => {
     if (!selectedId) return ''
-    const item = s.items.find((it) => it.id === selectedId)
-    if (!item) return selectedId.slice(0, 8)
-    const shapeNames: Record<string, string> = {
-      box: '长方体',
-      sphere: '球体',
-      cylinder: '圆柱',
-      capsule: '胶囊',
-      cone: '圆锥',
-      plane: '平面',
-      torus: '圆环',
-      spring: '弹簧',
-    }
-    const idx = s.items.filter((it) => it.shape === item.shape).indexOf(item)
-    return `${shapeNames[item.shape] ?? item.shape} ${idx + 1}`
-  })
+    return getFriendlyName(items, selectedId)
+  }, [items, selectedId])
+
+  const focusTarget = useMemo<[number, number, number] | undefined>(() => {
+    if (!selectedId) return undefined
+    const item = items.find((it) => it.id === selectedId)
+    return item ? item.position : undefined
+  }, [items, selectedId])
 
   const gizmoMode = editorConfig.gizmoMode
   const isFullscreen = ui.isFullscreen
@@ -264,6 +327,14 @@ export function Sandbox() {
           <ToolButton icon={Redo2} onClick={redo} title={t('sandbox.redo')} size="sm" />
         </div>
 
+        <ToolButton
+          icon={SkipForward}
+          onClick={requestStep}
+          title={t('sandbox.step')}
+          disabled={isRunning}
+          size="sm"
+        />
+
         <Divider />
 
         {!isRunning && selectedId && (
@@ -289,6 +360,40 @@ export function Sandbox() {
                 {t(labelKey)}
               </button>
             ))}
+          </div>
+        )}
+
+        {isRunning && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-paper px-2 py-1">
+            <ToolButton
+              icon={Zap}
+              onClick={() => setEditorConfig({ impulseMode: !impulseMode })}
+              title={t('sandbox.impulseMode')}
+              active={impulseMode}
+            />
+            {impulseMode && (
+              <>
+                <span className="text-xs text-text-secondary">{t('sandbox.impulseStrength')}</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={20}
+                  step={0.5}
+                  value={impulseStrength}
+                  onChange={(e) => setEditorConfig({ impulseStrength: Number(e.target.value) })}
+                  className="h-1.5 w-16 cursor-pointer appearance-none rounded-full bg-paper-tertiary accent-accent"
+                />
+                <span className="w-8 text-right text-xs font-mono text-text-secondary">
+                  {impulseStrength.toFixed(1)}
+                </span>
+              </>
+            )}
+            <ToolButton
+              icon={Route}
+              onClick={() => setEditorConfig({ showTrajectory: !showTrajectory })}
+              title={t('sandbox.trajectory')}
+              active={showTrajectory}
+            />
           </div>
         )}
 
@@ -385,6 +490,12 @@ export function Sandbox() {
           onClick={() => setCameraResetKey((k) => k + 1)}
           title={t('sandbox.cameraReset')}
         />
+        <ToolButton
+          icon={Crosshair}
+          onClick={() => setCameraFocusKey((k) => k + 1)}
+          title={t('sandbox.focusSelected')}
+          disabled={!selectedId}
+        />
         <ToolButton icon={Download} onClick={handleExport} title={t('sandbox.export')} />
         <ToolButton icon={Upload} onClick={handleImportClick} title={t('sandbox.import')} />
 
@@ -397,6 +508,11 @@ export function Sandbox() {
         />
 
         <div className="ml-auto flex items-center gap-1">
+          <ToolButton
+            icon={HelpCircle}
+            onClick={() => setUI({ isHelpOpen: !ui.isHelpOpen })}
+            title={t('sandbox.help')}
+          />
           {!isFullscreen && (
             <>
               <ToolButton
@@ -438,6 +554,7 @@ export function Sandbox() {
               {t('sandbox.selected')}: {friendlyName}
             </span>
           )}
+          <span className="ml-auto font-mono">FPS: {fps}</span>
         </div>
       )}
 
@@ -456,6 +573,8 @@ export function Sandbox() {
             cameraPosition={[10, 8, 10]}
             cameraView={editorConfig.cameraView}
             cameraResetKey={cameraResetKey}
+            focusTarget={focusTarget}
+            focusKey={cameraFocusKey}
             showGrid
           >
             <PhysicsProvider
@@ -464,6 +583,7 @@ export function Sandbox() {
               timeScale={editorConfig.timeScale}
             >
               <DeselectOnEmpty onSelect={() => selectItem(null)} />
+              {!isRunning && <ManualStepper />}
               <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
               <SandboxJoints />
               {items.map((item) => (
@@ -478,6 +598,9 @@ export function Sandbox() {
                   snapSize={editorConfig.snapSize}
                   angleSnapEnabled={editorConfig.angleSnapEnabled}
                   angleSnapSize={editorConfig.angleSnapSize}
+                  impulseMode={impulseMode}
+                  impulseStrength={impulseStrength}
+                  showTrajectory={showTrajectory}
                   onClick={(e) => {
                     e.stopPropagation()
                     const native = e.nativeEvent as MouseEvent
@@ -520,13 +643,50 @@ export function Sandbox() {
           )}
 
           {items.length === 0 && (
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <p className="rounded-lg border border-border bg-paper/90 px-4 py-2 text-sm text-text-tertiary shadow-sm">
-                {t('sandbox.empty')}
-              </p>
-              <p className="max-w-md rounded-lg border border-border bg-paper/80 px-4 py-2 text-center text-xs text-text-tertiary/70 shadow-sm">
-                {t('sandbox.shortcuts')}
-              </p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+              <p className="text-sm text-text-tertiary">{t('sandbox.empty')}</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUI({ isLeftPanelOpen: true })}
+                  className="rounded-lg border border-accent bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+                >
+                  {t('sandbox.emptyBuild')}
+                </button>
+                <div className="relative" ref={presetMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPresetMenu((s) => !s)}
+                    className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
+                  >
+                    {t('sandbox.emptyLoadPreset')}
+                  </button>
+                  {showPresetMenu && (
+                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-paper py-1 shadow-lg">
+                      {SANDBOX_PRESETS.map(({ id, label, scene }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => {
+                            loadScene(scene)
+                            setShowPresetMenu(false)
+                          }}
+                          className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUI({ isHelpOpen: true })}
+                  className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
+                >
+                  {t('sandbox.emptyTutorial')}
+                </button>
+              </div>
             </div>
           )}
 
@@ -538,11 +698,16 @@ export function Sandbox() {
         </div>
 
         {rightOpen && !isFullscreen && (
-          <div className="w-64 flex-shrink-0">
-            <PropertiesPanel />
+          <div className="flex w-64 flex-shrink-0 flex-col gap-2">
+            <SceneHierarchyPanel />
+            <div className="min-h-0 flex-1">
+              <PropertiesPanel />
+            </div>
           </div>
         )}
       </div>
+
+      <HelpOverlay />
     </div>
   )
 }

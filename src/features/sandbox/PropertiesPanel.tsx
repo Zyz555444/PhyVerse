@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Trash2, Copy, RotateCcw, Link2 } from 'lucide-react'
+import { Trash2, Copy, RotateCcw, Link2, Lock, Unlock, Eye, EyeOff, ArrowDownToLine } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Slider } from '@/shared/ui/Slider'
 import { Button } from '@/shared/ui/Button'
@@ -10,28 +10,11 @@ import {
   type SandboxCameraView,
   type SandboxJoint,
 } from './sandboxStore'
+import { getFriendlyName } from './friendlyName'
 
 const MATERIALS = ['metal', 'plastic', 'glass', 'wood', 'rubber', 'paper'] as const
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
-
-const SHAPE_LABELS_ZH: Record<string, string> = {
-  box: '长方体',
-  sphere: '球体',
-  cylinder: '圆柱',
-  capsule: '胶囊',
-  cone: '圆锥',
-  plane: '平面',
-  torus: '圆环',
-  spring: '弹簧',
-}
-
-function getFriendlyName(items: SandboxItem[], id: string): string {
-  const item = items.find((it) => it.id === id)
-  if (!item) return id.slice(0, 8)
-  const idx = items.filter((it) => it.shape === item.shape).indexOf(item)
-  return `${SHAPE_LABELS_ZH[item.shape] ?? item.shape} ${idx + 1}`
-}
 
 export function PropertiesPanel() {
   const { t } = useI18n()
@@ -47,6 +30,9 @@ export function PropertiesPanel() {
   const setGravity = useSandboxStore((s) => s.setGravity)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
   const removeJoint = useSandboxStore((s) => s.removeJoint)
+  const toggleLock = useSandboxStore((s) => s.toggleLock)
+  const toggleVisibility = useSandboxStore((s) => s.toggleVisibility)
+  const snapToGround = useSandboxStore((s) => s.snapToGround)
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
@@ -193,6 +179,9 @@ export function PropertiesPanel() {
           onCommit={(patch) => updateItemAndCommit(selectedItem.id, patch)}
           onRemove={() => removeItem(selectedItem.id)}
           onDuplicate={() => duplicateItem(selectedItem.id)}
+          onToggleLock={() => toggleLock(selectedItem.id)}
+          onToggleVisibility={() => toggleVisibility(selectedItem.id)}
+          onSnapToGround={() => snapToGround(selectedItem.id)}
         />
       )}
     </div>
@@ -325,6 +314,9 @@ interface SelectedItemPropertiesProps {
   onCommit: (patch: Partial<SandboxItem>) => void
   onRemove: () => void
   onDuplicate: () => void
+  onToggleLock: () => void
+  onToggleVisibility: () => void
+  onSnapToGround: () => void
 }
 
 function SelectedItemProperties({
@@ -334,6 +326,9 @@ function SelectedItemProperties({
   onCommit,
   onRemove,
   onDuplicate,
+  onToggleLock,
+  onToggleVisibility,
+  onSnapToGround,
 }: SelectedItemPropertiesProps) {
   const { t } = useI18n()
 
@@ -341,14 +336,60 @@ function SelectedItemProperties({
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <span
-          className="max-w-[70%] truncate rounded bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
+          className="max-w-[60%] truncate rounded bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
           title={item.id}
         >
           {friendlyName}
         </span>
-        <span className="text-xs capitalize text-text-tertiary">
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onToggleVisibility}
+            title={item.hidden ? t('sandbox.show') : t('sandbox.hide')}
+            className={cn(
+              'rounded p-1 transition-colors',
+              item.hidden
+                ? 'text-accent hover:bg-accent-soft'
+                : 'text-text-tertiary hover:bg-paper-tertiary hover:text-text-primary'
+            )}
+          >
+            {item.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={onToggleLock}
+            title={item.locked ? t('sandbox.unlock') : t('sandbox.lock')}
+            className={cn(
+              'rounded p-1 transition-colors',
+              item.locked
+                ? 'text-accent hover:bg-accent-soft'
+                : 'text-text-tertiary hover:bg-paper-tertiary hover:text-text-primary'
+            )}
+          >
+            {item.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-text-tertiary">{t('sandbox.shapeLabel')}</span>
+        <span className="capitalize text-text-secondary">
           {t(`sandbox.shape.${item.shape}`)}
         </span>
+        {(item.locked || item.hidden) && (
+          <span className="ml-auto flex gap-1">
+            {item.locked && (
+              <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] text-accent">
+                {t('sandbox.lockedBadge')}
+              </span>
+            )}
+            {item.hidden && (
+              <span className="rounded bg-paper-tertiary px-1.5 py-0.5 text-[10px] text-text-tertiary">
+                {t('sandbox.hiddenBadge')}
+              </span>
+            )}
+          </span>
+        )}
       </div>
 
       <Vector3Group
@@ -357,6 +398,7 @@ function SelectedItemProperties({
         min={-10}
         max={10}
         step={0.1}
+        disabled={item.locked}
         onChange={(v) => onChange({ position: v })}
         onCommit={(v) => onCommit({ position: v })}
       />
@@ -368,6 +410,7 @@ function SelectedItemProperties({
         max={Math.PI}
         step={0.05}
         valueFormatter={(v) => `${v.toFixed(2)} rad`}
+        disabled={item.locked}
         onChange={(v) => onChange({ rotation: v })}
         onCommit={(v) => onCommit({ rotation: v })}
       />
@@ -378,6 +421,7 @@ function SelectedItemProperties({
         min={0.1}
         max={3}
         step={0.1}
+        disabled={item.locked}
         onChange={(v) => onChange({ scale: v })}
         onCommit={(v) => onCommit({ scale: v })}
       />
@@ -388,6 +432,7 @@ function SelectedItemProperties({
         min={0.05}
         max={5}
         step={0.05}
+        disabled={item.locked}
         onChange={(v) => onChange({ size: v })}
         onCommit={(v) => onCommit({ size: v })}
       />
@@ -488,6 +533,15 @@ function SelectedItemProperties({
         <Button
           variant="outline"
           size="sm"
+          onClick={onSnapToGround}
+          leftIcon={<ArrowDownToLine className="h-4 w-4" />}
+          title={t('sandbox.snapToGround')}
+        >
+          {t('sandbox.snapToGround')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onRemove}
           leftIcon={<Trash2 className="h-4 w-4" />}
         >
@@ -505,6 +559,7 @@ interface Vector3GroupProps {
   max: number
   step: number
   valueFormatter?: (v: number) => string
+  disabled?: boolean
   onChange: (values: [number, number, number]) => void
   onCommit: (values: [number, number, number]) => void
 }
@@ -516,6 +571,7 @@ function Vector3Group({
   max,
   step,
   valueFormatter,
+  disabled,
   onChange,
   onCommit,
 }: Vector3GroupProps) {
@@ -532,6 +588,7 @@ function Vector3Group({
             min={min}
             max={max}
             step={step}
+            disabled={disabled}
             onValueChange={(v) => {
               const next: [number, number, number] = [...values]
               next[idx] = v[0]
