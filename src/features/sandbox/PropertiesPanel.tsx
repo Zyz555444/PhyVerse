@@ -229,6 +229,10 @@ function JointListItem({ joint, items, selected, onSelect, onRemove }: JointList
     spring: t('sandbox.shape.spring'),
     rope: t('sandbox.jointRope'),
     fixed: t('sandbox.jointFixed'),
+    revolute: t('sandbox.jointRevolute'),
+    prismatic: t('sandbox.jointPrismatic'),
+    motor: t('sandbox.jointMotor'),
+    gear: t('sandbox.jointGear'),
   }
   return (
     <div
@@ -286,10 +290,25 @@ function JointEditor({ joint, onCommit }: JointEditorProps) {
   const [anchorB, setAnchorB] = useState<[number, number, number]>(
     (joint.anchorB ?? [0, 0, 0]) as [number, number, number]
   )
+  const [axis, setAxis] = useState<[number, number, number]>(
+    (joint.axis ?? [0, 1, 0]) as [number, number, number]
+  )
+  const [limits, setLimits] = useState<[number, number]>(
+    (joint.limits ?? [0, 0]) as [number, number]
+  )
   const [restLength, setRestLength] = useState(joint.restLength ?? 1)
   const [stiffness, setStiffness] = useState(joint.stiffness ?? 100)
   const [damping, setDamping] = useState(joint.damping ?? 5)
   const [maxDistance, setMaxDistance] = useState(joint.maxDistance ?? 1)
+  const [targetVelocity, setTargetVelocity] = useState(joint.targetVelocity ?? 1)
+  const [maxMotorForce, setMaxMotorForce] = useState(joint.maxMotorForce ?? 10)
+  const [gearRatio, setGearRatio] = useState(joint.gearRatio ?? 1)
+
+  const needsAxis =
+    joint.type === 'revolute' ||
+    joint.type === 'prismatic' ||
+    joint.type === 'motor' ||
+    joint.type === 'gear'
 
   return (
     <div className="mt-3 space-y-3 rounded-md border border-border bg-paper p-2.5">
@@ -313,6 +332,43 @@ function JointEditor({ joint, onCommit }: JointEditorProps) {
         onChange={setAnchorB}
         onCommit={(v) => onCommit({ anchorB: v })}
       />
+
+      {needsAxis && (
+        <Vector3Group
+          label={t('sandbox.jointAxis')}
+          values={axis}
+          min={-1}
+          max={1}
+          step={0.05}
+          onChange={setAxis}
+          onCommit={(v) => onCommit({ axis: v })}
+        />
+      )}
+
+      {(joint.type === 'revolute' || joint.type === 'prismatic') && (
+        <>
+          <Slider
+            label={t('sandbox.jointLimits') + ' (min)'}
+            value={[limits[0]]}
+            min={-10}
+            max={10}
+            step={0.1}
+            onValueChange={(v) => setLimits((prev) => [v[0], prev[1]])}
+            onValueCommit={(v) => onCommit({ limits: [v[0], limits[1]] })}
+            valueFormatter={(v) => `${v.toFixed(1)}`}
+          />
+          <Slider
+            label={t('sandbox.jointLimits') + ' (max)'}
+            value={[limits[1]]}
+            min={-10}
+            max={10}
+            step={0.1}
+            onValueChange={(v) => setLimits((prev) => [prev[0], v[0]])}
+            onValueCommit={(v) => onCommit({ limits: [limits[0], v[0]] })}
+            valueFormatter={(v) => `${v.toFixed(1)}`}
+          />
+        </>
+      )}
 
       {joint.type === 'spring' && (
         <>
@@ -359,6 +415,44 @@ function JointEditor({ joint, onCommit }: JointEditorProps) {
           onValueChange={(v) => setMaxDistance(v[0])}
           onValueCommit={(v) => onCommit({ maxDistance: v[0] })}
           valueFormatter={(v) => `${v.toFixed(1)} m`}
+        />
+      )}
+
+      {joint.type === 'motor' && (
+        <>
+          <Slider
+            label={t('sandbox.jointTargetVelocity')}
+            value={[targetVelocity]}
+            min={-10}
+            max={10}
+            step={0.1}
+            onValueChange={(v) => setTargetVelocity(v[0])}
+            onValueCommit={(v) => onCommit({ targetVelocity: v[0] })}
+            valueFormatter={(v) => `${v.toFixed(1)} rad/s`}
+          />
+          <Slider
+            label={t('sandbox.jointMaxMotorForce')}
+            value={[maxMotorForce]}
+            min={0}
+            max={100}
+            step={1}
+            onValueChange={(v) => setMaxMotorForce(v[0])}
+            onValueCommit={(v) => onCommit({ maxMotorForce: v[0] })}
+            valueFormatter={(v) => `${v.toFixed(0)} N`}
+          />
+        </>
+      )}
+
+      {joint.type === 'gear' && (
+        <Slider
+          label={t('sandbox.jointGearRatio')}
+          value={[gearRatio]}
+          min={-5}
+          max={5}
+          step={0.1}
+          onValueChange={(v) => setGearRatio(v[0])}
+          onValueCommit={(v) => onCommit({ gearRatio: v[0] })}
+          valueFormatter={(v) => `${v.toFixed(1)}:1`}
         />
       )}
     </div>

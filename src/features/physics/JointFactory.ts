@@ -8,7 +8,8 @@ import type {
   UnitImpulseJoint,
 } from '@dimforge/rapier3d'
 
-export type JointType = 'fixed' | 'revolute' | 'prismatic' | 'spherical' | 'spring' | 'rope'
+export type JointType =
+  'fixed' | 'revolute' | 'prismatic' | 'spherical' | 'spring' | 'rope' | 'motor' | 'gear'
 
 export interface JointParams {
   type: JointType
@@ -22,6 +23,8 @@ export interface JointParams {
   damping?: number
   restLength?: number
   maxDistance?: number
+  targetVelocity?: number
+  maxMotorForce?: number
 }
 
 const defaultAnchor: [number, number, number] = [0, 0, 0]
@@ -77,6 +80,25 @@ export function createJoint(world: World, params: JointParams): ImpulseJoint {
     case 'rope': {
       const maxDistance = params.maxDistance ?? 1
       const desc = RAPIER.JointData.rope(maxDistance, anchor1, anchor2)
+      return world.createImpulseJoint(desc, params.body1, params.body2, true)
+    }
+
+    case 'motor': {
+      const desc = RAPIER.JointData.revolute(anchor1, anchor2, axis)
+      const joint = world.createImpulseJoint(desc, params.body1, params.body2, true)
+      ;(joint as UnitImpulseJoint).configureMotorVelocity(
+        params.targetVelocity ?? 1,
+        params.maxMotorForce ?? 10
+      )
+      return joint
+    }
+
+    case 'gear': {
+      // Rapier has no native gear joint. We create a fixed placeholder and let
+      // the consumer (SandboxJoints) enforce the angular velocity ratio each
+      // frame. This is a visual/kinematic approximation, not an energy-
+      // conserving physical coupling.
+      const desc = RAPIER.JointData.fixed(anchor1, identityRotation, anchor2, identityRotation)
       return world.createImpulseJoint(desc, params.body1, params.body2, true)
     }
 
@@ -160,5 +182,27 @@ export function createRopeJoint(
     anchor1,
     anchor2,
     maxDistance,
+  })
+}
+
+export function createMotorJoint(
+  world: World,
+  body1: RigidBody,
+  body2: RigidBody,
+  anchor1: [number, number, number] = [0, 0, 0],
+  anchor2: [number, number, number] = [0, 0, 0],
+  axis: [number, number, number] = [0, 1, 0],
+  targetVelocity = 1,
+  maxMotorForce = 10
+): ImpulseJoint {
+  return createJoint(world, {
+    type: 'motor',
+    body1,
+    body2,
+    anchor1,
+    anchor2,
+    axis,
+    targetVelocity,
+    maxMotorForce,
   })
 }

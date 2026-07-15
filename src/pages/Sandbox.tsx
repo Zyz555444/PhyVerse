@@ -70,6 +70,10 @@ const JOINT_TYPES: { type: JointType; labelKey: string }[] = [
   { type: 'spring', labelKey: 'sandbox.shape.spring' },
   { type: 'rope', labelKey: 'sandbox.jointRope' },
   { type: 'fixed', labelKey: 'sandbox.jointFixed' },
+  { type: 'revolute', labelKey: 'sandbox.jointRevolute' },
+  { type: 'prismatic', labelKey: 'sandbox.jointPrismatic' },
+  { type: 'motor', labelKey: 'sandbox.jointMotor' },
+  { type: 'gear', labelKey: 'sandbox.jointGear' },
 ]
 
 function DeselectOnEmpty({ onSelect }: { onSelect: () => void }) {

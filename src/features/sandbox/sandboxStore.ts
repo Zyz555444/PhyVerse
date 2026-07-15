@@ -21,7 +21,7 @@ export type SandboxShape =
 export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
 
-export type JointType = 'spring' | 'fixed' | 'rope'
+export type JointType = 'spring' | 'fixed' | 'rope' | 'revolute' | 'prismatic' | 'motor' | 'gear'
 
 export type SandboxToolMode = GizmoMode | 'impulse'
 
@@ -32,10 +32,20 @@ export interface SandboxJoint {
   bodyB: string
   anchorA?: [number, number, number]
   anchorB?: [number, number, number]
+  /** Rotation/slide axis in local body coordinates. */
+  axis?: [number, number, number]
+  /** Linear/angular limits [min, max] in meters or radians. */
+  limits?: [number, number]
   restLength?: number
   stiffness?: number
   damping?: number
   maxDistance?: number
+  /** Target velocity for motor joints (rad/s or m/s). */
+  targetVelocity?: number
+  /** Maximum motor force/torque. */
+  maxMotorForce?: number
+  /** Gear ratio: omegaB = -omegaA * ratio. */
+  gearRatio?: number
 }
 
 export interface SandboxItem {
@@ -578,8 +588,26 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
 
   addJoint: (joint) => {
     const id = generateId()
+    const withDefaults: Omit<SandboxJoint, 'id'> = {
+      ...joint,
+      anchorA: joint.anchorA ?? [0, 0, 0],
+      anchorB: joint.anchorB ?? [0, 0, 0],
+    }
+    if (withDefaults.type === 'revolute' || withDefaults.type === 'motor') {
+      withDefaults.axis = withDefaults.axis ?? [0, 1, 0]
+    }
+    if (withDefaults.type === 'prismatic') {
+      withDefaults.axis = withDefaults.axis ?? [1, 0, 0]
+    }
+    if (withDefaults.type === 'motor') {
+      withDefaults.targetVelocity = withDefaults.targetVelocity ?? 1
+      withDefaults.maxMotorForce = withDefaults.maxMotorForce ?? 10
+    }
+    if (withDefaults.type === 'gear') {
+      withDefaults.gearRatio = withDefaults.gearRatio ?? 1
+    }
     set((state) => ({
-      joints: [...state.joints, { ...joint, id }],
+      joints: [...state.joints, { ...withDefaults, id }],
       history: pushHistory(state),
     }))
     return id

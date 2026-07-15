@@ -6,6 +6,8 @@ import {
   createSpringJoint,
   createFixedJoint,
   createRopeJoint,
+  createMotorJoint,
+  createJoint as createPhysicsJoint,
 } from '@/features/physics/JointFactory'
 import { useSandboxStore, type SandboxJoint, type JointType } from './sandboxStore'
 
@@ -31,6 +33,7 @@ function createJoint(
           joint.anchorB ?? [0, 0, 0]
         )
       case 'fixed':
+      case 'gear':
         return createFixedJoint(
           world.world,
           bodyA.rigidBody,
@@ -47,6 +50,37 @@ function createJoint(
           joint.anchorA ?? [0, 0, 0],
           joint.anchorB ?? [0, 0, 0]
         )
+      case 'revolute':
+        return createPhysicsJoint(world.world, {
+          type: 'revolute',
+          body1: bodyA.rigidBody,
+          body2: bodyB.rigidBody,
+          anchor1: joint.anchorA ?? [0, 0, 0],
+          anchor2: joint.anchorB ?? [0, 0, 0],
+          axis: joint.axis ?? [0, 1, 0],
+          limits: joint.limits,
+        })
+      case 'prismatic':
+        return createPhysicsJoint(world.world, {
+          type: 'prismatic',
+          body1: bodyA.rigidBody,
+          body2: bodyB.rigidBody,
+          anchor1: joint.anchorA ?? [0, 0, 0],
+          anchor2: joint.anchorB ?? [0, 0, 0],
+          axis: joint.axis ?? [1, 0, 0],
+          limits: joint.limits,
+        })
+      case 'motor':
+        return createMotorJoint(
+          world.world,
+          bodyA.rigidBody,
+          bodyB.rigidBody,
+          joint.anchorA ?? [0, 0, 0],
+          joint.anchorB ?? [0, 0, 0],
+          joint.axis ?? [0, 1, 0],
+          joint.targetVelocity ?? 1,
+          joint.maxMotorForce ?? 10
+        )
       default:
         return null
     }
@@ -59,6 +93,10 @@ const JOINT_STYLE: Record<JointType, { color: string; dashed: boolean; opacity: 
   spring: { color: '#9b9b9b', dashed: true, opacity: 0.85 },
   rope: { color: '#a16207', dashed: false, opacity: 0.9 },
   fixed: { color: '#2563eb', dashed: true, opacity: 0.7 },
+  revolute: { color: '#16a34a', dashed: true, opacity: 0.8 },
+  prismatic: { color: '#9333ea', dashed: true, opacity: 0.8 },
+  motor: { color: '#ea580c', dashed: false, opacity: 0.9 },
+  gear: { color: '#0891b2', dashed: true, opacity: 0.8 },
 }
 
 function JointLine({ joint }: { joint: SandboxJoint }) {
@@ -120,6 +158,30 @@ function JointLine({ joint }: { joint: SandboxJoint }) {
     geometry.computeBoundingSphere()
     // LineDashedMaterial requires distance calculations to render dashes.
     lineRef.current?.computeLineDistances()
+
+    // Kinematic gear coupling: bodyB angular velocity along the gear axis is
+    // kept at -bodyA * ratio. This is an approximation, not a true constraint.
+    if (joint.type === 'gear') {
+      const axis = new THREE.Vector3(
+        joint.axis?.[0] ?? 0,
+        joint.axis?.[1] ?? 1,
+        joint.axis?.[2] ?? 0
+      ).normalize()
+      const avA = bodyA.rigidBody.angvel()
+      const projA = new THREE.Vector3(avA.x, avA.y, avA.z).dot(axis)
+      const targetB = axis.clone().multiplyScalar(-projA * (joint.gearRatio ?? 1))
+      const avB = bodyB.rigidBody.angvel()
+      const vecB = new THREE.Vector3(avB.x, avB.y, avB.z)
+      const perpB = vecB.sub(axis.clone().multiplyScalar(vecB.dot(axis)))
+      bodyB.rigidBody.setAngvel(
+        {
+          x: perpB.x + targetB.x,
+          y: perpB.y + targetB.y,
+          z: perpB.z + targetB.z,
+        },
+        true
+      )
+    }
   })
 
   return <lineSegments ref={lineRef} geometry={geometry} material={material} />
@@ -132,10 +194,15 @@ function jointSignature(joint: SandboxJoint): string {
     joint.bodyB,
     (joint.anchorA ?? [0, 0, 0]).join(','),
     (joint.anchorB ?? [0, 0, 0]).join(','),
+    (joint.axis ?? [0, 1, 0]).join(','),
+    (joint.limits ?? ['', '']).join(','),
     joint.restLength ?? '',
     joint.stiffness ?? '',
     joint.damping ?? '',
     joint.maxDistance ?? '',
+    joint.targetVelocity ?? '',
+    joint.maxMotorForce ?? '',
+    joint.gearRatio ?? '',
   ]
   return parts.join('|')
 }
