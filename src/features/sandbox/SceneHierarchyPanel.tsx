@@ -15,6 +15,10 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  RotateCw,
+  Ruler,
+  BrickWall,
+  Weight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -31,6 +35,10 @@ const SHAPE_ICON: Record<SandboxShape, LucideIcon> = {
   plane: Square,
   torus: CircleDashed,
   spring: Spline,
+  pulley: RotateCw,
+  slope: Ruler,
+  barrier: BrickWall,
+  force_meter: Weight,
 }
 
 export function SceneHierarchyPanel() {

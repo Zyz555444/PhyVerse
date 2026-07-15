@@ -9,6 +9,10 @@ const SHAPE_LABELS_ZH: Record<SandboxShape, string> = {
   plane: '平面',
   torus: '圆环',
   spring: '弹簧',
+  pulley: '滑轮',
+  slope: '斜面',
+  barrier: '挡板',
+  force_meter: '弹簧测力计',
 }
 
 export function getShapeLabelZh(shape: SandboxShape): string {

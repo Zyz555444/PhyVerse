@@ -45,8 +45,8 @@ export function HelpOverlay() {
       titleKey: 'sandbox.helpOther',
       items: [
         { keys: '?', descKey: 'sandbox.helpToggleHelp' },
-        { keys: t('sandbox.helpCameraReset'), descKey: 'sandbox.helpCameraResetDesc' },
-        { keys: t('sandbox.helpCameraFocus'), descKey: 'sandbox.helpCameraFocusDesc' },
+        { keys: 'Home', descKey: 'sandbox.helpCameraResetDesc' },
+        { keys: 'Double Click', descKey: 'sandbox.helpCameraFocusDesc' },
       ],
     },
   ]

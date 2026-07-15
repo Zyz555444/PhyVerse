@@ -8,6 +8,10 @@ import {
   Square,
   Spline,
   Layers,
+  RotateCw,
+  Ruler,
+  BrickWall,
+  Weight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -20,7 +24,7 @@ interface PaletteItem {
   icon: LucideIcon
 }
 
-const paletteItems: PaletteItem[] = [
+const geometryItems: PaletteItem[] = [
   { shape: 'box', icon: Box },
   { shape: 'sphere', icon: Circle },
   { shape: 'cylinder', icon: Cylinder },
@@ -29,6 +33,13 @@ const paletteItems: PaletteItem[] = [
   { shape: 'plane', icon: Square },
   { shape: 'torus', icon: CircleDashed },
   { shape: 'spring', icon: Spline },
+]
+
+const equipmentItems: PaletteItem[] = [
+  { shape: 'pulley', icon: RotateCw },
+  { shape: 'slope', icon: Ruler },
+  { shape: 'barrier', icon: BrickWall },
+  { shape: 'force_meter', icon: Weight },
 ]
 
 export function EquipmentPalette() {
@@ -52,7 +63,28 @@ export function EquipmentPalette() {
         {t('sandbox.equipment')}
       </h3>
       <div className="grid grid-cols-2 gap-2">
-        {paletteItems.map(({ shape, icon: Icon }) => (
+        {geometryItems.map(({ shape, icon: Icon }) => (
+          <button
+            key={shape}
+            type="button"
+            onClick={() => handleAdd(shape)}
+            title={t(`sandbox.shape.${shape}`)}
+            className={cn(
+              'flex flex-col items-center gap-1.5 rounded-lg border border-border p-3',
+              'bg-paper transition-colors hover:border-accent hover:text-accent'
+            )}
+          >
+            <Icon className="h-5 w-5" />
+            <span className="text-xs font-medium">{t(`sandbox.shape.${shape}`)}</span>
+          </button>
+        ))}
+      </div>
+
+      <h3 className="mb-3 mt-5 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+        {t('sandbox.labEquipment')}
+      </h3>
+      <div className="grid grid-cols-2 gap-2">
+        {equipmentItems.map(({ shape, icon: Icon }) => (
           <button
             key={shape}
             type="button"

@@ -5,7 +5,18 @@ import { getFriendlyName } from './friendlyName'
 export { getFriendlyName }
 
 export type SandboxShape =
-  'box' | 'sphere' | 'cylinder' | 'capsule' | 'cone' | 'plane' | 'torus' | 'spring'
+  | 'box'
+  | 'sphere'
+  | 'cylinder'
+  | 'capsule'
+  | 'cone'
+  | 'plane'
+  | 'torus'
+  | 'spring'
+  | 'pulley'
+  | 'slope'
+  | 'barrier'
+  | 'force_meter'
 
 export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
@@ -176,6 +187,10 @@ const DEFAULT_COLORS: Record<SandboxShape, string> = {
   plane: '#d4c8a8',
   torus: '#2563eb',
   spring: '#9b9b9b',
+  pulley: '#475569',
+  slope: '#d4c8a8',
+  barrier: '#94a3b8',
+  force_meter: '#f59e0b',
 }
 
 const DEFAULT_SIZES: Record<SandboxShape, [number, number, number]> = {
@@ -187,6 +202,10 @@ const DEFAULT_SIZES: Record<SandboxShape, [number, number, number]> = {
   plane: [4, 0.02, 3],
   torus: [0.5, 0.15, 0],
   spring: [0.25, 1, 0],
+  pulley: [0.6, 0.6, 0.15],
+  slope: [3, 0.08, 1],
+  barrier: [2, 0.5, 0.08],
+  force_meter: [0.12, 0.8, 0.12],
 }
 
 function generateId(): string {
@@ -213,10 +232,51 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
   showAccelerationVector: false,
 }
 
+function getEquipmentDefaults(shape: SandboxShape): Partial<SandboxItem> {
+  switch (shape) {
+    case 'pulley':
+      return {
+        material: 'metal',
+        isDynamic: false,
+        mass: 0,
+        friction: 0.1,
+        restitution: 0.1,
+      }
+    case 'slope':
+      return {
+        rotation: [0, 0, Math.PI / 6],
+        material: 'wood',
+        isDynamic: false,
+        mass: 0,
+        friction: 0.4,
+        restitution: 0.2,
+      }
+    case 'barrier':
+      return {
+        material: 'wood',
+        isDynamic: false,
+        mass: 0,
+        friction: 0.5,
+        restitution: 0.2,
+      }
+    case 'force_meter':
+      return {
+        material: 'metal',
+        isDynamic: false,
+        mass: 0,
+        friction: 0.5,
+        restitution: 0.2,
+      }
+    default:
+      return {}
+  }
+}
+
 function createDefaultItem(shape: SandboxShape, position?: [number, number, number]): SandboxItem {
   const offsetX = (Math.random() - 0.5) * 2
   const offsetZ = (Math.random() - 0.5) * 2
   const isPlane = shape === 'plane'
+  const defaults = getEquipmentDefaults(shape)
   return {
     id: generateId(),
     shape,
@@ -230,6 +290,7 @@ function createDefaultItem(shape: SandboxShape, position?: [number, number, numb
     mass: 1,
     friction: 0.5,
     restitution: 0.3,
+    ...defaults,
   }
 }
 
@@ -615,10 +676,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
           telemetry: { ...state.telemetry, simTime: state.telemetry.simTime + dt },
         }
       }
-      const merged = [...state.telemetry.samples, ...samples]
-      if (merged.length > TELEMETRY_MAX_SAMPLES) {
-        merged.splice(0, merged.length - TELEMETRY_MAX_SAMPLES)
-      }
+      const merged = [...state.telemetry.samples, ...samples].slice(-TELEMETRY_MAX_SAMPLES)
       return {
         telemetry: {
           ...state.telemetry,

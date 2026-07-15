@@ -29,7 +29,8 @@ interface SandboxItemRendererProps {
 
 interface ShapeGeometry {
   args: unknown[]
-  type: 'box' | 'sphere' | 'cylinder' | 'capsule' | 'cone' | 'plane' | 'torus' | 'spring'
+  type:
+    'box' | 'sphere' | 'cylinder' | 'capsule' | 'cone' | 'plane' | 'torus' | 'spring' | 'composite'
 }
 
 const SELECTION_COLOR = '#f59e0b'
@@ -45,6 +46,8 @@ function toQuaternion(euler: [number, number, number]): [number, number, number,
 function getPhysicsShape(shape: SandboxShape): ShapeType {
   if (shape === 'torus') return 'box'
   if (shape === 'spring') return 'cylinder'
+  if (shape === 'pulley') return 'cylinder'
+  if (shape === 'slope' || shape === 'barrier' || shape === 'force_meter') return 'box'
   if (
     shape === 'box' ||
     shape === 'sphere' ||
@@ -76,6 +79,12 @@ function getPhysicsDimensions(item: SandboxItem): [number, number, number] {
       return [(sizeX * sx) / 2, 0, (sizeZ * sz) / 2]
     case 'torus':
       return [(sizeX * sx) / 2, (sizeY * sy) / 2, (sizeX * sx) / 2]
+    case 'pulley':
+      return [(sizeX * sx) / 2, (sizeZ * sz) / 2, 0]
+    case 'slope':
+    case 'barrier':
+    case 'force_meter':
+      return [(sizeX * sx) / 2, (sizeY * sy) / 2, (sizeZ * sz) / 2]
     default:
       return [0.1, 0.1, 0.1]
   }
@@ -99,6 +108,11 @@ function getVisualGeometry(shape: SandboxShape, size: [number, number, number]):
       return { type: 'torus', args: [size[0], size[1], 16, 64] }
     case 'spring':
       return { type: 'spring', args: [size[0], size[1]] }
+    case 'pulley':
+    case 'slope':
+    case 'barrier':
+    case 'force_meter':
+      return { type: 'composite', args: [] }
     default:
       return { type: 'box', args: size }
   }
@@ -132,6 +146,11 @@ function SelectionOutline({
         return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0], size[1], 16, 48))
       case 'plane':
         return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0], size[2]))
+      case 'pulley':
+      case 'slope':
+      case 'barrier':
+      case 'force_meter':
+        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
       default:
         return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
     }
@@ -173,6 +192,195 @@ function SpringGeometry({ radius, height }: { radius: number; height: number }) 
   }, [geometry])
 
   return <primitive attach="geometry" object={geometry} />
+}
+
+function PulleyGeometry({ radius, thickness }: { radius: number; thickness: number }) {
+  const wheelGeo = useMemo(() => {
+    return new THREE.CylinderGeometry(radius, radius, thickness, 32)
+  }, [radius, thickness])
+  const hubGeo = useMemo(() => {
+    return new THREE.CylinderGeometry(radius * 0.15, radius * 0.15, thickness * 1.8, 16)
+  }, [radius, thickness])
+  const bracketGeo = useMemo(() => {
+    const w = radius * 2.4
+    const h = radius * 1.4
+    const d = thickness * 1.4
+    const box = new THREE.BoxGeometry(w, h, d)
+    box.translate(0, h / 2 - radius * 0.3, 0)
+    return box
+  }, [radius, thickness])
+
+  useEffect(() => {
+    return () => {
+      wheelGeo.dispose()
+      hubGeo.dispose()
+      bracketGeo.dispose()
+    }
+  }, [wheelGeo, hubGeo, bracketGeo])
+
+  return (
+    <group>
+      {/* Rotate cylinder so wheel faces Z; item rotation applies afterwards. */}
+      <group rotation={[0, 0, Math.PI / 2]}>
+        <mesh geometry={wheelGeo}>
+          <meshStandardMaterial color="#475569" metalness={0.4} roughness={0.5} />
+        </mesh>
+        <mesh geometry={hubGeo}>
+          <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.4} />
+        </mesh>
+      </group>
+      <mesh geometry={bracketGeo}>
+        <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.5} />
+      </mesh>
+    </group>
+  )
+}
+
+function SlopeGeometry({
+  width,
+  thickness,
+  depth,
+}: {
+  width: number
+  thickness: number
+  depth: number
+}) {
+  const boardGeo = useMemo(() => {
+    const geo = new THREE.BoxGeometry(width, thickness, depth)
+    geo.translate(0, 0, 0)
+    return geo
+  }, [width, thickness, depth])
+
+  const tickGroup = useMemo(() => {
+    const group = new THREE.Group()
+    const divisions = 10
+    const minorLen = depth * 0.25
+    const majorLen = depth * 0.45
+    const step = width / divisions
+    for (let i = 1; i < divisions; i++) {
+      const x = -width / 2 + i * step
+      const isMajor = i % 5 === 0
+      const len = isMajor ? majorLen : minorLen
+      const geo = new THREE.BoxGeometry(0.01, 0.01, len)
+      geo.translate(x, thickness / 2 + 0.006, -depth / 2 + len / 2)
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x5c4033 }))
+      group.add(mesh)
+    }
+    return group
+  }, [width, thickness, depth])
+
+  useEffect(() => {
+    return () => {
+      boardGeo.dispose()
+      tickGroup.children.forEach((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose()
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m) => m.dispose())
+          } else {
+            child.material.dispose()
+          }
+        }
+      })
+    }
+  }, [boardGeo, tickGroup])
+
+  return (
+    <group>
+      <mesh geometry={boardGeo}>
+        <meshStandardMaterial color="#d4c8a8" roughness={0.8} />
+      </mesh>
+      <primitive object={tickGroup} />
+    </group>
+  )
+}
+
+function BarrierGeometry({
+  width,
+  height,
+  thickness,
+}: {
+  width: number
+  height: number
+  thickness: number
+}) {
+  const boardGeo = useMemo(() => {
+    return new THREE.BoxGeometry(width, height, thickness)
+  }, [width, height, thickness])
+  const baseGeo = useMemo(() => {
+    const w = width + 0.12
+    const d = thickness + 0.1
+    const geo = new THREE.BoxGeometry(w, 0.06, d)
+    geo.translate(0, -height / 2 - 0.03, 0)
+    return geo
+  }, [width, thickness, height])
+
+  useEffect(() => {
+    return () => {
+      boardGeo.dispose()
+      baseGeo.dispose()
+    }
+  }, [boardGeo, baseGeo])
+
+  return (
+    <group>
+      <mesh geometry={boardGeo}>
+        <meshStandardMaterial color="#94a3b8" roughness={0.6} />
+      </mesh>
+      <mesh geometry={baseGeo}>
+        <meshStandardMaterial color="#64748b" roughness={0.6} />
+      </mesh>
+    </group>
+  )
+}
+
+function ForceMeterGeometry({ radius, height }: { radius: number; height: number }) {
+  const bodyGeo = useMemo(() => {
+    const geo = new THREE.CylinderGeometry(radius, radius, height * 0.72, 24)
+    geo.translate(0, height * 0.11, 0)
+    return geo
+  }, [radius, height])
+  const hookGeo = useMemo(() => {
+    const geo = new THREE.TorusGeometry(radius * 0.5, radius * 0.14, 12, 24, Math.PI * 1.3)
+    geo.translate(0, -height * 0.55, 0)
+    return geo
+  }, [radius, height])
+  const ringGeo = useMemo(() => {
+    const geo = new THREE.TorusGeometry(radius * 0.6, radius * 0.12, 12, 24)
+    geo.translate(0, height * 0.46, 0)
+    return geo
+  }, [radius, height])
+  const markerGeo = useMemo(() => {
+    const geo = new THREE.BoxGeometry(radius * 1.6, 0.02, radius * 0.3)
+    geo.translate(0, 0, radius * 1.05)
+    return geo
+  }, [radius])
+
+  useEffect(() => {
+    return () => {
+      bodyGeo.dispose()
+      hookGeo.dispose()
+      ringGeo.dispose()
+      markerGeo.dispose()
+    }
+  }, [bodyGeo, hookGeo, ringGeo, markerGeo])
+
+  return (
+    <group>
+      <mesh geometry={bodyGeo}>
+        <meshStandardMaterial color="#f59e0b" metalness={0.3} roughness={0.4} />
+      </mesh>
+      <mesh geometry={hookGeo}>
+        <meshStandardMaterial color="#1e293b" metalness={0.5} roughness={0.4} />
+      </mesh>
+      <mesh geometry={ringGeo}>
+        <meshStandardMaterial color="#1e293b" metalness={0.5} roughness={0.4} />
+      </mesh>
+      <mesh geometry={markerGeo}>
+        <meshStandardMaterial color="#0f172a" />
+      </mesh>
+    </group>
+  )
 }
 
 function TrajectoryLine({
@@ -459,6 +667,28 @@ export function SandboxItemRenderer({
         )}
         {geometry.type === 'spring' && (
           <SpringGeometry radius={item.size[0]} height={item.size[1]} />
+        )}
+        {geometry.type === 'composite' && (
+          <>
+            <boxGeometry args={item.size} />
+            <meshStandardMaterial transparent opacity={0} depthWrite={false} />
+            {item.shape === 'pulley' && (
+              <PulleyGeometry radius={item.size[0] / 2} thickness={item.size[2]} />
+            )}
+            {item.shape === 'slope' && (
+              <SlopeGeometry width={item.size[0]} thickness={item.size[1]} depth={item.size[2]} />
+            )}
+            {item.shape === 'barrier' && (
+              <BarrierGeometry
+                width={item.size[0]}
+                height={item.size[1]}
+                thickness={item.size[2]}
+              />
+            )}
+            {item.shape === 'force_meter' && (
+              <ForceMeterGeometry radius={item.size[0] / 2} height={item.size[1]} />
+            )}
+          </>
         )}
         {selected && <SelectionOutline shape={item.shape} size={item.size} />}
         {multiSelected && !selected && <SelectionOutline shape={item.shape} size={item.size} />}
