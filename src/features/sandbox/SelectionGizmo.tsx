@@ -7,6 +7,7 @@ import { useSandboxStore } from './sandboxStore'
 interface SelectionGizmoProps {
   mesh: Object3D | null
   mode: GizmoMode
+  space?: 'world' | 'local'
   snapEnabled: boolean
   snapSize: number
   angleSnapEnabled: boolean
@@ -19,6 +20,7 @@ interface SelectionGizmoProps {
 export function SelectionGizmo({
   mesh,
   mode,
+  space = 'world',
   snapEnabled,
   snapSize,
   angleSnapEnabled,
@@ -89,6 +91,7 @@ export function SelectionGizmo({
     <TransformControls
       object={mesh}
       mode={mode}
+      space={space}
       enabled={enabled}
       translationSnap={snapEnabled && mode === 'translate' ? snapSize : undefined}
       rotationSnap={angleSnapEnabled && mode === 'rotate' ? angleSnapSize : undefined}

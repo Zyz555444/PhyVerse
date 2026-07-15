@@ -15,6 +15,8 @@ interface SandboxItemRendererProps {
   multiSelected: boolean
   editingEnabled: boolean
   gizmoMode: 'translate' | 'rotate' | 'scale'
+  gizmoSpace?: 'world' | 'local'
+  multiSelectionActive?: boolean
   snapEnabled: boolean
   snapSize: number
   angleSnapEnabled: boolean
@@ -454,6 +456,8 @@ export function SandboxItemRenderer({
   multiSelected,
   editingEnabled,
   gizmoMode,
+  gizmoSpace,
+  multiSelectionActive,
   snapEnabled,
   snapSize,
   angleSnapEnabled,
@@ -639,7 +643,7 @@ export function SandboxItemRenderer({
   // Hidden items are not rendered and do not participate in physics clicks.
   if (item.hidden) return null
 
-  const gizmoEnabled = selected && editingEnabled && !item.locked
+  const gizmoEnabled = selected && editingEnabled && !item.locked && !multiSelectionActive
   const trajectoryActive = !!showTrajectory && selected && !editingEnabled
   const vectorOverlayActive = !editingEnabled && item.isDynamic
 
@@ -696,6 +700,7 @@ export function SandboxItemRenderer({
       <SelectionGizmo
         mesh={mesh}
         mode={gizmoMode}
+        space={gizmoSpace}
         snapEnabled={snapEnabled}
         snapSize={snapSize}
         angleSnapEnabled={angleSnapEnabled}

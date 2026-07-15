@@ -20,6 +20,7 @@ export type SandboxShape =
 
 export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
+export type GizmoSpace = 'world' | 'local'
 
 export type JointType = 'spring' | 'fixed' | 'rope' | 'revolute' | 'prismatic' | 'motor' | 'gear'
 
@@ -83,6 +84,7 @@ export interface SandboxEditorConfig {
   timeScale: number
   cameraView: SandboxCameraView
   gizmoMode: GizmoMode
+  gizmoSpace: GizmoSpace
   /** When true, clicking a body in run mode applies an impulse instead of selecting. */
   impulseMode: boolean
   /** Magnitude of the impulse applied in impulse mode. */
@@ -171,6 +173,9 @@ interface SandboxState extends SandboxScene {
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
   selectItem: (id: string | null, multi?: boolean) => void
+  selectItems: (ids: string[], multi?: boolean) => void
+  selectAll: () => void
+  nudgeSelection: (axis: 'x' | 'y' | 'z', direction: 1 | -1, step?: number) => void
   updateItem: (id: string, patch: Partial<SandboxItem>) => void
   updateItemAndCommit: (id: string, patch: Partial<SandboxItem>) => void
   commitHistory: () => void
@@ -265,6 +270,7 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
   timeScale: 1,
   cameraView: 'free',
   gizmoMode: 'translate',
+  gizmoSpace: 'world',
   impulseMode: false,
   impulseStrength: 5,
   showTrajectory: false,
@@ -421,6 +427,52 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       return { selectedId: id, multiSelectedIds: [] }
     }),
 
+  selectItems: (ids, multi) =>
+    set((state) => {
+      if (ids.length === 0) return { selectedId: null, multiSelectedIds: [] }
+      const uniqueIds = Array.from(new Set(ids))
+      const validIds = uniqueIds.filter((id) => state.items.some((item) => item.id === id))
+      if (validIds.length === 0) return { selectedId: null, multiSelectedIds: [] }
+      if (multi && state.selectedId) {
+        const existing = new Set([state.selectedId, ...state.multiSelectedIds])
+        validIds.forEach((id) => {
+          if (existing.has(id)) {
+            existing.delete(id)
+          } else {
+            existing.add(id)
+          }
+        })
+        const next = Array.from(existing)
+        return { selectedId: next[0] ?? null, multiSelectedIds: next.slice(1) }
+      }
+      return { selectedId: validIds[0], multiSelectedIds: validIds.slice(1) }
+    }),
+
+  selectAll: () =>
+    set((state) => {
+      if (state.items.length === 0) return { selectedId: null, multiSelectedIds: [] }
+      const ids = state.items.map((item) => item.id)
+      return { selectedId: ids[0], multiSelectedIds: ids.slice(1) }
+    }),
+
+  nudgeSelection: (axis, direction, step) =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const delta = step ?? state.editorConfig.snapSize
+      const axisIdx = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+      const nextItems = state.items.map((item) => {
+        if (!ids.includes(item.id)) return item
+        const nextPosition: [number, number, number] = [...item.position]
+        nextPosition[axisIdx] += delta * direction
+        return { ...item, position: nextPosition }
+      })
+      return {
+        items: nextItems,
+        history: pushHistory(state),
+      }
+    }),
+
   updateItem: (id, patch) =>
     set((state) => {
       const nextItems = state.items.map((item) => (item.id === id ? { ...item, ...patch } : item))
@@ -465,14 +517,18 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       const dupSet = new Set(idsToDup)
       const sources = state.items.filter((item) => dupSet.has(item.id))
       if (sources.length === 0) return state
+      const offset = findFreeOffset(
+        state.items,
+        sources.map((s) => s.position)
+      )
       const newItems: SandboxItem[] = sources.map((source) => ({
         ...source,
         id: generateId(),
-        position: [source.position[0] + 0.5, source.position[1], source.position[2] + 0.5] as [
-          number,
-          number,
-          number,
-        ],
+        position: [
+          source.position[0] + offset[0],
+          source.position[1] + offset[1],
+          source.position[2] + offset[2],
+        ] as [number, number, number],
       }))
       return {
         items: [...state.items, ...newItems],
@@ -497,14 +553,18 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   pasteItem: () =>
     set((state) => {
       if (!state.clipboard || state.clipboard.length === 0) return state
+      const offset = findFreeOffset(
+        state.items,
+        state.clipboard.map((s) => s.position)
+      )
       const pastedItems: SandboxItem[] = state.clipboard.map((item) => ({
         ...item,
         id: generateId(),
-        position: [item.position[0] + 0.5, item.position[1], item.position[2] + 0.5] as [
-          number,
-          number,
-          number,
-        ],
+        position: [
+          item.position[0] + offset[0],
+          item.position[1] + offset[1],
+          item.position[2] + offset[2],
+        ] as [number, number, number],
       }))
       return {
         items: [...state.items, ...pastedItems],
@@ -815,6 +875,28 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       task: { ...state.task, records: [] },
     })),
 }))
+
+function findFreeOffset(
+  existingItems: SandboxItem[],
+  basePositions: [number, number, number][],
+  step = 0.5,
+  maxAttempts = 20
+): [number, number, number] {
+  const occupied = new Set(
+    existingItems.map((item) => `${item.position[0].toFixed(2)},${item.position[2].toFixed(2)}`)
+  )
+
+  for (let i = 1; i <= maxAttempts; i++) {
+    const offset: [number, number, number] = [i * step, 0, i * step]
+    const targetKeys = basePositions.map(
+      (pos) => `${(pos[0] + offset[0]).toFixed(2)},${(pos[2] + offset[2]).toFixed(2)}`
+    )
+    if (!targetKeys.some((key) => occupied.has(key))) {
+      return offset
+    }
+  }
+  return [step, 0, step]
+}
 
 function getHalfHeight(item: SandboxItem): number {
   const [, sy] = item.scale

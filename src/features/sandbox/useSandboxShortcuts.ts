@@ -10,7 +10,9 @@ interface SandboxShortcuts {
   onUndo: () => void
   onRedo: () => void
   onSetGizmoMode: (mode: GizmoMode) => void
+  onSetGizmoSpace?: (space: 'world' | 'local') => void
   onDeselect?: () => void
+  onSelectAll?: () => void
   onCopy?: () => void
   onPaste?: () => void
   onToggleSnap?: () => void
@@ -18,6 +20,7 @@ interface SandboxShortcuts {
   onToggleHelp?: () => void
   onStep?: () => void
   onToggleImpulse?: () => void
+  onNudge?: (axis: 'x' | 'y' | 'z', direction: 1 | -1) => void
   isGizmoActive?: () => boolean
   hasSelection?: boolean
 }
@@ -29,7 +32,9 @@ export function useSandboxShortcuts({
   onUndo,
   onRedo,
   onSetGizmoMode,
+  onSetGizmoSpace,
   onDeselect,
+  onSelectAll,
   onCopy,
   onPaste,
   onToggleSnap,
@@ -37,6 +42,7 @@ export function useSandboxShortcuts({
   onToggleHelp,
   onStep,
   onToggleImpulse,
+  onNudge,
   isGizmoActive,
   hasSelection,
 }: SandboxShortcuts): void {
@@ -65,6 +71,13 @@ export function useSandboxShortcuts({
       if (isMod && event.key.toLowerCase() === 'v' && onPaste) {
         event.preventDefault()
         onPaste()
+        return
+      }
+
+      // Select all
+      if (isMod && event.key.toLowerCase() === 'a' && onSelectAll) {
+        event.preventDefault()
+        onSelectAll()
         return
       }
 
@@ -124,6 +137,45 @@ export function useSandboxShortcuts({
         return
       }
 
+      // Toggle gizmo space (L)
+      if (!isMod && event.key.toLowerCase() === 'l' && onSetGizmoSpace) {
+        event.preventDefault()
+        onSetGizmoSpace('local')
+        return
+      }
+
+      // Nudge selection with arrow keys (no modifier)
+      if (!isMod && onNudge) {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault()
+          onNudge('x', -1)
+          return
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault()
+          onNudge('x', 1)
+          return
+        }
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          if (event.shiftKey) {
+            onNudge('y', 1)
+          } else {
+            onNudge('z', -1)
+          }
+          return
+        }
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          if (event.shiftKey) {
+            onNudge('y', -1)
+          } else {
+            onNudge('z', 1)
+          }
+          return
+        }
+      }
+
       // Run/pause (disabled while dragging gizmo so Space doesn't toggle simulation)
       if ((event.key === ' ' || event.code === 'Space') && !isGizmoDragging) {
         event.preventDefault()
@@ -177,7 +229,9 @@ export function useSandboxShortcuts({
     onUndo,
     onRedo,
     onSetGizmoMode,
+    onSetGizmoSpace,
     onDeselect,
+    onSelectAll,
     onCopy,
     onPaste,
     onToggleSnap,
@@ -185,6 +239,7 @@ export function useSandboxShortcuts({
     onToggleHelp,
     onStep,
     onToggleImpulse,
+    onNudge,
     isGizmoActive,
     hasSelection,
   ])

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
@@ -18,6 +18,8 @@ import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
 import { SandboxItemRenderer } from '@/features/sandbox/SandboxItemRenderer'
 import { SandboxJoints } from '@/features/sandbox/SandboxJoints'
+import { BoxSelection } from '@/features/sandbox/BoxSelection'
+import { MultiSelectionGizmo } from '@/features/sandbox/MultiSelectionGizmo'
 import { SceneHierarchyPanel } from '@/features/sandbox/SceneHierarchyPanel'
 import { HelpOverlay } from '@/features/sandbox/HelpOverlay'
 import { DataPanel } from '@/features/sandbox/DataPanel'
@@ -78,21 +80,6 @@ const JOINT_TYPES: { type: JointType; labelKey: string }[] = [
   { type: 'motor', labelKey: 'sandbox.jointMotor' },
   { type: 'gear', labelKey: 'sandbox.jointGear' },
 ]
-
-function DeselectOnEmpty({ onSelect }: { onSelect: () => void }) {
-  const { gl } = useThree()
-  useEffect(() => {
-    const dom = gl.domElement
-    const handler = (e: PointerEvent) => {
-      if (e.target === dom) {
-        onSelect()
-      }
-    }
-    dom.addEventListener('pointerdown', handler)
-    return () => dom.removeEventListener('pointerdown', handler)
-  }, [gl, onSelect])
-  return null
-}
 
 function ManualStepper() {
   const { world } = usePhysics()
@@ -238,6 +225,8 @@ export function Sandbox() {
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const ui = useSandboxStore((s) => s.ui)
   const selectItem = useSandboxStore((s) => s.selectItem)
+  const selectAll = useSandboxStore((s) => s.selectAll)
+  const nudgeSelection = useSandboxStore((s) => s.nudgeSelection)
   const updateItem = useSandboxStore((s) => s.updateItem)
   const commitHistory = useSandboxStore((s) => s.commitHistory)
   const removeItem = useSandboxStore((s) => s.removeItem)
@@ -354,7 +343,10 @@ export function Sandbox() {
     onUndo: undo,
     onRedo: redo,
     onSetGizmoMode: (mode) => setEditorConfig({ gizmoMode: mode }),
+    onSetGizmoSpace: (space) =>
+      setEditorConfig({ gizmoSpace: space === 'local' ? 'world' : 'local' }),
     onDeselect: () => selectItem(null),
+    onSelectAll: selectAll,
     onCopy: () => {
       if (selectedId) copyItem(selectedId)
     },
@@ -368,6 +360,7 @@ export function Sandbox() {
         setEditorConfig({ impulseMode: !impulseMode })
       }
     },
+    onNudge: (axis, direction) => nudgeSelection(axis, direction),
     isGizmoActive: () => isGizmoDragging,
     hasSelection: !!selectedId,
   })
@@ -486,6 +479,7 @@ export function Sandbox() {
   }, [items, selectedId])
 
   const gizmoMode = editorConfig.gizmoMode
+  const gizmoSpace = editorConfig.gizmoSpace
   const isFullscreen = ui.isFullscreen
   const leftOpen = ui.isLeftPanelOpen
   const rightOpen = ui.isRightPanelOpen
@@ -535,28 +529,40 @@ export function Sandbox() {
         <Divider />
 
         {!isRunning && selectedId && (
-          <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
-            {(
-              [
-                ['translate', 'sandbox.gizmoTranslate'],
-                ['rotate', 'sandbox.gizmoRotate'],
-                ['scale', 'sandbox.gizmoScale'],
-              ] as const
-            ).map(([mode, labelKey]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setEditorConfig({ gizmoMode: mode })}
-                className={cn(
-                  'rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                  gizmoMode === mode
-                    ? 'bg-accent-soft text-accent'
-                    : 'text-text-secondary hover:text-text-primary'
-                )}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
+          <div className="flex items-center gap-1">
+            <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
+              {(
+                [
+                  ['translate', 'sandbox.gizmoTranslate'],
+                  ['rotate', 'sandbox.gizmoRotate'],
+                  ['scale', 'sandbox.gizmoScale'],
+                ] as const
+              ).map(([mode, labelKey]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setEditorConfig({ gizmoMode: mode })}
+                  className={cn(
+                    'rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                    gizmoMode === mode
+                      ? 'bg-accent-soft text-accent'
+                      : 'text-text-secondary hover:text-text-primary'
+                  )}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setEditorConfig({ gizmoSpace: gizmoSpace === 'world' ? 'local' : 'world' })
+              }
+              title={t(gizmoSpace === 'world' ? 'sandbox.gizmoWorld' : 'sandbox.gizmoLocal')}
+              className="rounded-lg border border-border bg-paper px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary"
+            >
+              {gizmoSpace === 'world' ? 'W' : 'L'}
+            </button>
           </div>
         )}
 
@@ -827,9 +833,9 @@ export function Sandbox() {
                 autoStep={isRunning}
                 timeScale={editorConfig.timeScale}
               >
-                <DeselectOnEmpty onSelect={() => selectItem(null)} />
                 {!isRunning && <ManualStepper />}
                 <TelemetrySampler isRunning={isRunning} />
+                <BoxSelection />
                 <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
                 <SandboxJoints />
                 {items.map((item) => (
@@ -840,6 +846,8 @@ export function Sandbox() {
                     multiSelected={multiSelectedIds.includes(item.id)}
                     editingEnabled={!isRunning}
                     gizmoMode={gizmoMode}
+                    gizmoSpace={gizmoSpace}
+                    multiSelectionActive={multiSelectedIds.length > 0}
                     snapEnabled={editorConfig.snapEnabled}
                     snapSize={editorConfig.snapSize}
                     angleSnapEnabled={editorConfig.angleSnapEnabled}
@@ -859,6 +867,22 @@ export function Sandbox() {
                     }}
                   />
                 ))}
+                <MultiSelectionGizmo
+                  selectedIds={[selectedId, ...multiSelectedIds].filter(Boolean) as string[]}
+                  items={items}
+                  mode={gizmoMode}
+                  space={gizmoSpace}
+                  snapEnabled={editorConfig.snapEnabled}
+                  snapSize={editorConfig.snapSize}
+                  angleSnapEnabled={editorConfig.angleSnapEnabled}
+                  angleSnapSize={editorConfig.angleSnapSize}
+                  enabled={!isRunning && multiSelectedIds.length > 0}
+                  onChange={(id, patch) => updateItem(id, patch)}
+                  onCommit={(id, patch) => {
+                    updateItem(id, patch)
+                    commitHistory()
+                  }}
+                />
               </PhysicsProvider>
             </Scene>
 
