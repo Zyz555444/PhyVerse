@@ -121,6 +121,20 @@ export interface TelemetryState {
   live: TelemetrySample | null
 }
 
+/** A manually captured data snapshot during a teaching task. */
+export interface TaskRecord {
+  simTime: number
+  sample: TelemetrySample
+  note?: string
+}
+
+export interface TaskState {
+  activeTaskId: string | null
+  currentStepIndex: number
+  completedTaskIds: string[]
+  records: TaskRecord[]
+}
+
 const TELEMETRY_MAX_SAMPLES = 600
 
 interface HistoryState {
@@ -151,6 +165,8 @@ interface SandboxState extends SandboxScene {
   stepRequested: number
   /** Real-time physics telemetry for the tracked body. */
   telemetry: TelemetryState
+  /** Active teaching task state. */
+  task: TaskState
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -186,9 +202,23 @@ interface SandboxState extends SandboxScene {
   setTelemetryTracked: (id: string | null) => void
   /** Update the latest live reading (does not affect history). */
   setLiveReading: (reading: TelemetrySample | null) => void
+  /** Start a teaching task by id. Caller is responsible for loading the task scene. */
+  startTask: (taskId: string) => void
+  /** Exit the current teaching task. */
+  exitTask: () => void
+  /** Advance to the next task step. */
+  advanceTaskStep: () => void
+  /** Reset the current task to its first step. */
+  resetTaskStep: () => void
+  /** Mark a task as completed. */
+  completeTask: (taskId: string) => void
+  /** Add a manually captured record to the active task. */
+  addTaskRecord: (record: TaskRecord) => void
+  /** Remove all captured records for the active task. */
+  clearTaskRecords: () => void
 }
 
-const DEFAULT_COLORS: Record<SandboxShape, string> = {
+const DEFAULT_COLORS: { [K in SandboxShape]: string } = {
   box: '#33a6b8',
   sphere: '#dc2626',
   cylinder: '#2e8b57',
@@ -203,7 +233,7 @@ const DEFAULT_COLORS: Record<SandboxShape, string> = {
   force_meter: '#f59e0b',
 }
 
-const DEFAULT_SIZES: Record<SandboxShape, [number, number, number]> = {
+const DEFAULT_SIZES: { [K in SandboxShape]: [number, number, number] } = {
   box: [0.6, 0.6, 0.6],
   sphere: [0.4, 0, 0],
   cylinder: [0.3, 1, 0],
@@ -344,6 +374,12 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     simTime: 0,
     trackedId: null,
     live: null,
+  },
+  task: {
+    activeTaskId: null,
+    currentStepIndex: 0,
+    completedTaskIds: [],
+    records: [],
   },
 
   addItem: (shape, position) =>
@@ -727,6 +763,56 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   setLiveReading: (reading) =>
     set((state) => ({
       telemetry: { ...state.telemetry, live: reading },
+    })),
+
+  startTask: (taskId) =>
+    set(() => ({
+      task: {
+        activeTaskId: taskId,
+        currentStepIndex: 0,
+        completedTaskIds: [],
+        records: [],
+      },
+    })),
+
+  exitTask: () =>
+    set((state) => ({
+      task: {
+        activeTaskId: null,
+        currentStepIndex: 0,
+        completedTaskIds: state.task.completedTaskIds,
+        records: [],
+      },
+    })),
+
+  advanceTaskStep: () =>
+    set((state) => ({
+      task: { ...state.task, currentStepIndex: state.task.currentStepIndex + 1 },
+    })),
+
+  resetTaskStep: () =>
+    set((state) => ({
+      task: { ...state.task, currentStepIndex: 0 },
+    })),
+
+  completeTask: (taskId) =>
+    set((state) => ({
+      task: {
+        ...state.task,
+        completedTaskIds: state.task.completedTaskIds.includes(taskId)
+          ? state.task.completedTaskIds
+          : [...state.task.completedTaskIds, taskId],
+      },
+    })),
+
+  addTaskRecord: (record) =>
+    set((state) => ({
+      task: { ...state.task, records: [...state.task.records, record] },
+    })),
+
+  clearTaskRecords: () =>
+    set((state) => ({
+      task: { ...state.task, records: [] },
     })),
 }))
 

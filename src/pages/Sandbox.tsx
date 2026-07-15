@@ -30,6 +30,9 @@ import {
   exportScene,
   importScene,
 } from '@/features/sandbox/sceneStorage'
+import { TaskPanel } from '@/features/sandbox/TaskPanel'
+import { useTaskMonitor } from '@/features/sandbox/useTaskMonitor'
+import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
 import {
@@ -251,6 +254,14 @@ export function Sandbox() {
   const addJoint = useSandboxStore((s) => s.addJoint)
   const requestStep = useSandboxStore((s) => s.requestStep)
   const setTelemetryTracked = useSandboxStore((s) => s.setTelemetryTracked)
+  const startTask = useSandboxStore((s) => s.startTask)
+  const exitTask = useSandboxStore((s) => s.exitTask)
+  const advanceTaskStep = useSandboxStore((s) => s.advanceTaskStep)
+  const resetTaskStep = useSandboxStore((s) => s.resetTaskStep)
+  const addTaskRecord = useSandboxStore((s) => s.addTaskRecord)
+  const clearTelemetry = useSandboxStore((s) => s.clearTelemetry)
+  const taskState = useSandboxStore((s) => s.task)
+  const telemetry = useSandboxStore((s) => s.telemetry)
 
   const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -259,11 +270,14 @@ export function Sandbox() {
   const [showJointMenu, setShowJointMenu] = useState(false)
   const [cameraFocusKey, setCameraFocusKey] = useState(0)
   const [showPresetMenu, setShowPresetMenu] = useState(false)
+  const [leftTab, setLeftTab] = useState<'equipment' | 'tasks'>('equipment')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jointMenuRef = useRef<HTMLDivElement>(null)
   const presetMenuRef = useRef<HTMLDivElement>(null)
   const prevItemCountRef = useRef(items.length)
+
+  useTaskMonitor()
 
   const impulseMode = editorConfig.impulseMode
   const impulseStrength = editorConfig.impulseStrength
@@ -399,6 +413,63 @@ export function Sandbox() {
       ...(type === 'rope' ? { maxDistance: 1.5 } : {}),
     })
     setShowJointMenu(false)
+  }
+
+  const handleStartTask = (task: SandboxTask) => {
+    loadScene(task.scene)
+    startTask(task.id)
+    clearTelemetry()
+    setLeftTab('tasks')
+    setIsRunning(false)
+    const tracked =
+      task.scene.items.find((it) => it.isDynamic)?.id ?? task.scene.items[0]?.id ?? null
+    if (tracked) {
+      selectItem(tracked)
+    }
+  }
+
+  const handleExitTask = () => {
+    exitTask()
+    setLeftTab('equipment')
+  }
+
+  const handleAddRecord = () => {
+    if (!telemetry.live) return
+    addTaskRecord({
+      simTime: telemetry.simTime,
+      sample: telemetry.live,
+    })
+  }
+
+  const handleExportRecords = () => {
+    if (taskState.records.length === 0) return
+    const header = 'time,posX,posY,posZ,velX,velY,velZ,speed,accel,KE,PE,totalEnergy'
+    const rows = taskState.records.map((r) =>
+      [
+        r.simTime.toFixed(4),
+        r.sample.pos[0].toFixed(4),
+        r.sample.pos[1].toFixed(4),
+        r.sample.pos[2].toFixed(4),
+        r.sample.vel[0].toFixed(4),
+        r.sample.vel[1].toFixed(4),
+        r.sample.vel[2].toFixed(4),
+        r.sample.speed.toFixed(4),
+        r.sample.accel.toFixed(4),
+        r.sample.ke.toFixed(4),
+        r.sample.pe.toFixed(4),
+        (r.sample.ke + r.sample.pe).toFixed(4),
+      ].join(',')
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `task-records-${taskState.activeTaskId ?? 'sandbox'}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const canCreateJoint = [selectedId, ...multiSelectedIds].filter(Boolean).length >= 2
@@ -699,8 +770,43 @@ export function Sandbox() {
       <div className={cn('flex flex-col gap-2', canvasHeight)}>
         <div className="flex flex-1 gap-2 min-h-0">
           {leftOpen && !isFullscreen && (
-            <div className="w-52 flex-shrink-0">
-              <EquipmentPalette />
+            <div className="flex w-52 flex-shrink-0 flex-col gap-2">
+              <div className="flex rounded-lg border border-border bg-paper p-0.5">
+                {(
+                  [
+                    ['equipment', 'sandbox.equipment'],
+                    ['tasks', 'sandbox.taskLibrary'],
+                  ] as const
+                ).map(([tab, labelKey]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setLeftTab(tab)}
+                    className={cn(
+                      'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                      leftTab === tab
+                        ? 'bg-accent-soft text-accent'
+                        : 'text-text-secondary hover:text-text-primary'
+                    )}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {leftTab === 'equipment' ? (
+                  <EquipmentPalette />
+                ) : (
+                  <TaskPanel
+                    onStartTask={handleStartTask}
+                    onExitTask={handleExitTask}
+                    onAdvanceStep={advanceTaskStep}
+                    onResetStep={resetTaskStep}
+                    onAddRecord={handleAddRecord}
+                    onExportRecords={handleExportRecords}
+                  />
+                )}
+              </div>
             </div>
           )}
 

@@ -18,9 +18,13 @@ const SANDBOX_SHAPES: SandboxShape[] = [
   'plane',
   'torus',
   'spring',
+  'pulley',
+  'slope',
+  'barrier',
+  'force_meter',
 ]
 
-const JOINT_TYPES = ['spring', 'fixed', 'rope'] as const
+const JOINT_TYPES = ['spring', 'fixed', 'rope', 'revolute', 'prismatic', 'motor', 'gear'] as const
 
 export interface VersionedScene extends SandboxScene {
   version: number
