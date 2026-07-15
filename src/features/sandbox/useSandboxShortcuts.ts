@@ -17,6 +17,7 @@ interface SandboxShortcuts {
   onToggleFullscreen?: () => void
   onToggleHelp?: () => void
   onStep?: () => void
+  onToggleImpulse?: () => void
   isGizmoActive?: () => boolean
   hasSelection?: boolean
 }
@@ -35,6 +36,7 @@ export function useSandboxShortcuts({
   onToggleFullscreen,
   onToggleHelp,
   onStep,
+  onToggleImpulse,
   isGizmoActive,
   hasSelection,
 }: SandboxShortcuts): void {
@@ -96,8 +98,8 @@ export function useSandboxShortcuts({
         return
       }
 
-      // Gizmo mode switching (only when not dragging)
-      if (!isGizmoDragging && onSetGizmoMode) {
+      // Gizmo mode switching (only when not dragging and no modifier)
+      if (!isMod && !isGizmoDragging && onSetGizmoMode) {
         if (event.key.toLowerCase() === 't') {
           event.preventDefault()
           onSetGizmoMode('translate')
@@ -115,8 +117,8 @@ export function useSandboxShortcuts({
         }
       }
 
-      // Toggle snap
-      if (event.key.toLowerCase() === 'g' && onToggleSnap) {
+      // Toggle snap (no modifier)
+      if (!isMod && event.key.toLowerCase() === 'g' && onToggleSnap) {
         event.preventDefault()
         onToggleSnap()
         return
@@ -131,21 +133,28 @@ export function useSandboxShortcuts({
 
       // Single-step simulation (N) — only meaningful while paused, but we
       // forward the request and let the host decide.
-      if (event.key.toLowerCase() === 'n' && onStep && !isMod) {
+      if (!isMod && event.key.toLowerCase() === 'n' && onStep) {
         event.preventDefault()
         onStep()
         return
       }
 
       // Fullscreen toggle (F)
-      if (event.key.toLowerCase() === 'f' && onToggleFullscreen && !isMod) {
+      if (!isMod && event.key.toLowerCase() === 'f' && onToggleFullscreen) {
         event.preventDefault()
         onToggleFullscreen()
         return
       }
 
+      // Impulse mode toggle (I)
+      if (!isMod && event.key.toLowerCase() === 'i' && onToggleImpulse) {
+        event.preventDefault()
+        onToggleImpulse()
+        return
+      }
+
       // Help overlay (?)
-      if (event.key === '?' && onToggleHelp) {
+      if (!isMod && event.key === '?' && onToggleHelp) {
         event.preventDefault()
         onToggleHelp()
         return
@@ -175,6 +184,7 @@ export function useSandboxShortcuts({
     onToggleFullscreen,
     onToggleHelp,
     onStep,
+    onToggleImpulse,
     isGizmoActive,
     hasSelection,
   ])

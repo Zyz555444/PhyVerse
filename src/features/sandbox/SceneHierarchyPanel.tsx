@@ -66,8 +66,7 @@ export function SceneHierarchyPanel() {
     selectItem(id, multi)
   }
 
-  const isRowSelected = (id: string) =>
-    id === selectedId || multiSelectedIds.includes(id)
+  const isRowSelected = (id: string) => id === selectedId || multiSelectedIds.includes(id)
 
   return (
     <div className="flex flex-col rounded-lg border border-border bg-paper-secondary">
@@ -117,12 +116,7 @@ export function SceneHierarchyPanel() {
                           : 'text-text-secondary hover:bg-paper-tertiary/40'
                     )}
                   >
-                    <Icon
-                      className={cn(
-                        'h-3 w-3 shrink-0',
-                        item.hidden && 'opacity-40'
-                      )}
-                    />
+                    <Icon className={cn('h-3 w-3 shrink-0', item.hidden && 'opacity-40')} />
                     {isEditing ? (
                       <input
                         autoFocus
@@ -162,7 +156,8 @@ export function SceneHierarchyPanel() {
                         'shrink-0 rounded p-0.5 transition-colors',
                         item.hidden
                           ? 'text-accent opacity-100'
-                          : 'text-text-tertiary opacity-0 hover:text-text-primary group-hover:opacity-100'
+                          : 'text-text-tertiary opacity-0 hover:text-text-primary group-hover:opacity-100',
+                        isSelected && 'opacity-100'
                       )}
                     >
                       {item.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -178,7 +173,8 @@ export function SceneHierarchyPanel() {
                         'shrink-0 rounded p-0.5 transition-colors',
                         item.locked
                           ? 'text-accent opacity-100'
-                          : 'text-text-tertiary opacity-0 hover:text-text-primary group-hover:opacity-100'
+                          : 'text-text-tertiary opacity-0 hover:text-text-primary group-hover:opacity-100',
+                        isSelected && 'opacity-100'
                       )}
                     >
                       {item.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
@@ -190,7 +186,10 @@ export function SceneHierarchyPanel() {
                         removeItem(item.id)
                       }}
                       title={t('sandbox.delete')}
-                      className="shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-colors hover:text-red-500 group-hover:opacity-100"
+                      className={cn(
+                        'shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-colors hover:text-red-500 group-hover:opacity-100',
+                        isSelected && 'opacity-100'
+                      )}
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

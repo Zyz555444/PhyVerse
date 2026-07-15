@@ -7,6 +7,7 @@ import { createMaterial, type MaterialPreset } from '@/features/canvas/Materials
 import type { ShapeType } from '@/shared/types/physics'
 import type { SandboxItem, SandboxShape } from './sandboxStore'
 import { SelectionGizmo } from './SelectionGizmo'
+import { VectorOverlay } from './VectorOverlay'
 
 interface SandboxItemRendererProps {
   item: SandboxItem
@@ -106,46 +107,35 @@ function getVisualGeometry(shape: SandboxShape, size: [number, number, number]):
 function SelectionOutline({
   shape,
   size,
-  scale,
 }: {
   shape: SandboxShape
   size: [number, number, number]
-  scale: [number, number, number]
 }) {
+  // The outline is a child of the mesh, so mesh scale is applied automatically.
+  // Use raw size here to avoid double-scaling.
   const geometry = useMemo(() => {
-    const sx = scale[0]
-    const sy = scale[1]
-    const sz = scale[2]
     switch (shape) {
       case 'box':
-        return new THREE.EdgesGeometry(
-          new THREE.BoxGeometry(size[0] * sx, size[1] * sy, size[2] * sz)
-        )
+        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
       case 'sphere': {
-        const r = size[0] * sx
+        const r = size[0]
         return new THREE.EdgesGeometry(new THREE.SphereGeometry(r, 24, 12))
       }
       case 'cylinder':
       case 'spring':
-        return new THREE.EdgesGeometry(
-          new THREE.CylinderGeometry(size[0] * sx, size[0] * sx, size[1] * sy, 32)
-        )
+        return new THREE.EdgesGeometry(new THREE.CylinderGeometry(size[0], size[0], size[1], 32))
       case 'capsule':
-        return new THREE.EdgesGeometry(
-          new THREE.CapsuleGeometry(size[0] * sx, size[1] * sy, 16, 32)
-        )
+        return new THREE.EdgesGeometry(new THREE.CapsuleGeometry(size[0], size[1], 16, 32))
       case 'cone':
-        return new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0] * sx, size[1] * sy, 32))
+        return new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0], size[1], 32))
       case 'torus':
-        return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0] * sx, size[1] * sy, 16, 48))
+        return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0], size[1], 16, 48))
       case 'plane':
-        return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0] * sx, size[2] * sz))
+        return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0], size[2]))
       default:
-        return new THREE.EdgesGeometry(
-          new THREE.BoxGeometry(size[0] * sx, size[1] * sy, size[2] * sz)
-        )
+        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
     }
-  }, [shape, size, scale])
+  }, [shape, size])
 
   useEffect(() => {
     return () => {
@@ -185,7 +175,13 @@ function SpringGeometry({ radius, height }: { radius: number; height: number }) 
   return <primitive attach="geometry" object={geometry} />
 }
 
-function TrajectoryLine({ bodyRef, active }: { bodyRef: React.MutableRefObject<ReturnType<PhysicsWorld['getBody']> | null>; active: boolean }) {
+function TrajectoryLine({
+  bodyRef,
+  active,
+}: {
+  bodyRef: React.MutableRefObject<ReturnType<PhysicsWorld['getBody']> | null>
+  active: boolean
+}) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     const positions = new Float32Array(TRAJECTORY_MAX_POINTS * 3)
@@ -350,15 +346,16 @@ export function SandboxItemRenderer({
     const body = bodyRef.current
     if (!body) return
     if (editingEnabled && itemIsDynamic) {
-      body.rigidBody.setBodyType(1, true) // 1 = kinematic position-based in Rapier
+      body.rigidBody.setBodyType(2, true) // 2 = kinematic position-based in Rapier
     } else if (!editingEnabled && itemIsDynamic) {
       body.rigidBody.setBodyType(0, true) // 0 = dynamic
     }
   }, [editingEnabled, itemIsDynamic])
 
-  // Sync body transform (and mesh, when editing) from store. Fires only when
-  // item.position/rotation/scale actually change, so it never fights the
-  // running-mode useFrame that writes body→mesh.
+  // Sync body transform from store. Position/rotation only while editing so
+  // they never fight the running-mode useFrame that writes body→mesh. Scale is
+  // always synced because physics dimensions already include it and the visual
+  // mesh must stay consistent.
   useEffect(() => {
     const body = bodyRef.current
     if (!body) return
@@ -370,13 +367,13 @@ export function SandboxItemRenderer({
     const q = toQuaternion(item.rotation)
     body.rigidBody.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }, true)
 
-    if (editingEnabled) {
-      const meshNode = meshRef.current
-      if (meshNode) {
+    const meshNode = meshRef.current
+    if (meshNode) {
+      if (editingEnabled) {
         meshNode.position.set(item.position[0], item.position[1], item.position[2])
         meshNode.quaternion.set(q[0], q[1], q[2], q[3])
-        meshNode.scale.set(item.scale[0], item.scale[1], item.scale[2])
       }
+      meshNode.scale.set(item.scale[0], item.scale[1], item.scale[2])
     }
   }, [item.id, item.position, item.rotation, item.scale, editingEnabled])
 
@@ -436,6 +433,7 @@ export function SandboxItemRenderer({
 
   const gizmoEnabled = selected && editingEnabled && !item.locked
   const trajectoryActive = !!showTrajectory && selected && !editingEnabled
+  const vectorOverlayActive = !editingEnabled && item.isDynamic
 
   return (
     <>
@@ -462,10 +460,8 @@ export function SandboxItemRenderer({
         {geometry.type === 'spring' && (
           <SpringGeometry radius={item.size[0]} height={item.size[1]} />
         )}
-        {selected && <SelectionOutline shape={item.shape} size={item.size} scale={item.scale} />}
-        {multiSelected && !selected && (
-          <SelectionOutline shape={item.shape} size={item.size} scale={item.scale} />
-        )}
+        {selected && <SelectionOutline shape={item.shape} size={item.size} />}
+        {multiSelected && !selected && <SelectionOutline shape={item.shape} size={item.size} />}
       </mesh>
       <SelectionGizmo
         mesh={mesh}
@@ -479,6 +475,7 @@ export function SandboxItemRenderer({
         enabled={gizmoEnabled}
       />
       {trajectoryActive && <TrajectoryLine bodyRef={bodyRef} active={trajectoryActive} />}
+      {vectorOverlayActive && <VectorOverlay bodyRef={bodyRef} />}
     </>
   )
 }

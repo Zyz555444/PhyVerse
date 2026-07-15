@@ -1,4 +1,10 @@
-import type { SandboxItem, SandboxScene, SandboxShape, SandboxJoint } from './sandboxStore'
+import type {
+  SandboxItem,
+  SandboxScene,
+  SandboxShape,
+  SandboxJoint,
+  TelemetrySample,
+} from './sandboxStore'
 
 const STORAGE_KEY = 'phyverse-sandbox-scene'
 const CURRENT_VERSION = 1
@@ -150,6 +156,51 @@ export function exportScene(scene: SandboxScene): void {
     const a = document.createElement('a')
     a.href = url
     a.download = `phyverse-sandbox-${Date.now()}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+const CSV_HEADER =
+  'time_s,pos_x_m,pos_y_m,pos_z_m,vel_x_mps,vel_y_mps,vel_z_mps,speed_mps,accel_mps2,kinetic_energy_j,potential_energy_j,total_energy_j'
+
+function csvEscape(value: number): string {
+  // Use enough precision for physics data; fixed notation avoids scientific notation surprises in spreadsheets.
+  return Number.isFinite(value) ? value.toFixed(4) : ''
+}
+
+/** Export telemetry samples as a CSV file download. */
+export function exportTelemetryCsv(samples: TelemetrySample[], label: string): void {
+  if (typeof window === 'undefined') return
+  const rows = samples.map((s) =>
+    [
+      s.t,
+      s.pos[0],
+      s.pos[1],
+      s.pos[2],
+      s.vel[0],
+      s.vel[1],
+      s.vel[2],
+      s.speed,
+      s.accel,
+      s.ke,
+      s.pe,
+      s.ke + s.pe,
+    ]
+      .map(csvEscape)
+      .join(',')
+  )
+  const csv = [CSV_HEADER, ...rows].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    const safeLabel = label ? label.replace(/[^\w\u4e00-\u9fa5-]+/g, '_') : 'telemetry'
+    a.download = `phyverse-${safeLabel}-${Date.now()}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

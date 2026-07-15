@@ -68,7 +68,39 @@ export interface SandboxEditorConfig {
   impulseStrength: number
   /** When true, the selected body leaves a trajectory trail while running. */
   showTrajectory: boolean
+  /** Show velocity vector arrows on dynamic bodies while running. */
+  showVelocityVector: boolean
+  /** Show acceleration vector arrows on dynamic bodies while running. */
+  showAccelerationVector: boolean
 }
+
+/** A single physics sample for the currently tracked body. */
+export interface TelemetrySample {
+  /** Simulation time in seconds. */
+  t: number
+  pos: [number, number, number]
+  vel: [number, number, number]
+  speed: number
+  /** Linear acceleration magnitude (m/s²). */
+  accel: number
+  /** Kinetic energy (J). */
+  ke: number
+  /** Gravitational potential energy relative to y=0 (J). */
+  pe: number
+}
+
+export interface TelemetryState {
+  samples: TelemetrySample[]
+  sampling: boolean
+  /** Accumulated simulation time (seconds), only advances while running. */
+  simTime: number
+  /** Tracked item id; follows the current selection. */
+  trackedId: string | null
+  /** Latest reading; updated ~10Hz regardless of sampling flag. */
+  live: TelemetrySample | null
+}
+
+const TELEMETRY_MAX_SAMPLES = 600
 
 interface HistoryState {
   past: SandboxScene[]
@@ -96,6 +128,8 @@ interface SandboxState extends SandboxScene {
   pendingHistorySnapshot: SandboxScene | null
   /** Monotonically increasing counter; bumping it requests a single physics step. */
   stepRequested: number
+  /** Real-time physics telemetry for the tracked body. */
+  telemetry: TelemetryState
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -109,7 +143,7 @@ interface SandboxState extends SandboxScene {
   setGravity: (gravity: [number, number, number]) => void
   resetScene: () => void
   clearScene: () => void
-  loadScene: (scene: SandboxScene) => void
+  loadScene: (scene: SandboxScene, options?: { pushHistory?: boolean }) => void
   undo: () => void
   redo: () => void
   setEditorConfig: (patch: Partial<SandboxEditorConfig>) => void
@@ -124,6 +158,13 @@ interface SandboxState extends SandboxScene {
   setDisplayName: (id: string, name: string) => void
   requestStep: () => void
   getFriendlyName: (id: string) => string
+  toggleTelemetrySampling: () => void
+  clearTelemetry: () => void
+  /** Push a batch of samples (collected in the r3f loop) and advance sim time. */
+  pushTelemetrySamples: (samples: TelemetrySample[], dt: number) => void
+  setTelemetryTracked: (id: string | null) => void
+  /** Update the latest live reading (does not affect history). */
+  setLiveReading: (reading: TelemetrySample | null) => void
 }
 
 const DEFAULT_COLORS: Record<SandboxShape, string> = {
@@ -168,6 +209,8 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
   impulseMode: false,
   impulseStrength: 5,
   showTrajectory: false,
+  showVelocityVector: false,
+  showAccelerationVector: false,
 }
 
 function createDefaultItem(shape: SandboxShape, position?: [number, number, number]): SandboxItem {
@@ -224,6 +267,13 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   },
   pendingHistorySnapshot: null,
   stepRequested: 0,
+  telemetry: {
+    samples: [],
+    sampling: false,
+    simTime: 0,
+    trackedId: null,
+    live: null,
+  },
 
   addItem: (shape, position) =>
     set((state) => {
@@ -371,6 +421,13 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       multiSelectedIds: [],
       gravity: DEFAULT_GRAVITY,
       history: pushHistory(state),
+      telemetry: {
+        samples: [],
+        sampling: state.telemetry.sampling,
+        simTime: 0,
+        trackedId: null,
+        live: null,
+      },
     })),
 
   clearScene: () =>
@@ -380,17 +437,36 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       selectedId: null,
       multiSelectedIds: [],
       history: pushHistory(state),
+      telemetry: {
+        samples: [],
+        sampling: state.telemetry.sampling,
+        simTime: 0,
+        trackedId: null,
+        live: null,
+      },
     })),
 
-  loadScene: (scene) =>
-    set((state) => ({
-      items: scene.items,
-      joints: scene.joints ?? [],
-      gravity: scene.gravity,
-      selectedId: null,
-      multiSelectedIds: [],
-      history: pushHistory(state),
-    })),
+  loadScene: (scene, options = {}) =>
+    set((state) => {
+      const next: Partial<SandboxState> = {
+        items: scene.items,
+        joints: scene.joints ?? [],
+        gravity: scene.gravity,
+        selectedId: null,
+        multiSelectedIds: [],
+        telemetry: {
+          samples: [],
+          sampling: state.telemetry.sampling,
+          simTime: 0,
+          trackedId: null,
+          live: null,
+        },
+      }
+      if (options.pushHistory !== false) {
+        next.history = pushHistory(state)
+      }
+      return next as SandboxState
+    }),
 
   undo: () =>
     set((state) => {
@@ -490,17 +566,13 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
 
   toggleLock: (id) =>
     set((state) => ({
-      items: state.items.map((it) =>
-        it.id === id ? { ...it, locked: !it.locked } : it
-      ),
+      items: state.items.map((it) => (it.id === id ? { ...it, locked: !it.locked } : it)),
       history: pushHistory(state),
     })),
 
   toggleVisibility: (id) =>
     set((state) => ({
-      items: state.items.map((it) =>
-        it.id === id ? { ...it, hidden: !it.hidden } : it
-      ),
+      items: state.items.map((it) => (it.id === id ? { ...it, hidden: !it.hidden } : it)),
       history: pushHistory(state),
     })),
 
@@ -512,13 +584,64 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       history: pushHistory(state),
     })),
 
-  requestStep: () =>
-    set((state) => ({ stepRequested: state.stepRequested + 1 })),
+  requestStep: () => set((state) => ({ stepRequested: state.stepRequested + 1 })),
 
   getFriendlyName: (id) => {
     const state = get()
     return getFriendlyName(state.items, id)
   },
+
+  toggleTelemetrySampling: () =>
+    set((state) => ({
+      telemetry: {
+        ...state.telemetry,
+        sampling: !state.telemetry.sampling,
+        // Clear previous batch when (re)starting so charts begin fresh.
+        samples: !state.telemetry.sampling ? [] : state.telemetry.samples,
+        simTime: !state.telemetry.sampling ? 0 : state.telemetry.simTime,
+      },
+    })),
+
+  clearTelemetry: () =>
+    set((state) => ({
+      telemetry: { ...state.telemetry, samples: [], simTime: 0 },
+    })),
+
+  pushTelemetrySamples: (samples, dt) =>
+    set((state) => {
+      if (!state.telemetry.sampling || samples.length === 0) {
+        // Still advance sim time so charts stay aligned with the run clock.
+        return {
+          telemetry: { ...state.telemetry, simTime: state.telemetry.simTime + dt },
+        }
+      }
+      const merged = [...state.telemetry.samples, ...samples]
+      if (merged.length > TELEMETRY_MAX_SAMPLES) {
+        merged.splice(0, merged.length - TELEMETRY_MAX_SAMPLES)
+      }
+      return {
+        telemetry: {
+          ...state.telemetry,
+          samples: merged,
+          simTime: state.telemetry.simTime + dt,
+        },
+      }
+    }),
+
+  setTelemetryTracked: (id) =>
+    set((state) => ({
+      telemetry: {
+        ...state.telemetry,
+        trackedId: id,
+        // Clear samples when the tracked target changes to avoid mixing bodies.
+        samples: id === state.telemetry.trackedId ? state.telemetry.samples : [],
+      },
+    })),
+
+  setLiveReading: (reading) =>
+    set((state) => ({
+      telemetry: { ...state.telemetry, live: reading },
+    })),
 }))
 
 function getHalfHeight(item: SandboxItem): number {

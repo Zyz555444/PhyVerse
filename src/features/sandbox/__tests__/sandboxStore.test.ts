@@ -196,6 +196,35 @@ describe('sandboxStore', () => {
     })
   })
 
+  describe('loadScene', () => {
+    it('pushes history by default', () => {
+      useSandboxStore.setState({ items: [makeBox()] })
+
+      useSandboxStore.getState().loadScene({
+        gravity: [0, -5, 0],
+        items: [makeBox({ id: 'loaded' })],
+      })
+
+      expect(useSandboxStore.getState().history.past).toHaveLength(1)
+      expect(useSandboxStore.getState().items[0].id).toBe('loaded')
+    })
+
+    it('can skip pushing history', () => {
+      useSandboxStore.setState({ items: [makeBox()] })
+
+      useSandboxStore.getState().loadScene(
+        {
+          gravity: [0, -5, 0],
+          items: [makeBox({ id: 'loaded' })],
+        },
+        { pushHistory: false }
+      )
+
+      expect(useSandboxStore.getState().history.past).toHaveLength(0)
+      expect(useSandboxStore.getState().items[0].id).toBe('loaded')
+    })
+  })
+
   describe('requestStep', () => {
     it('increments stepRequested counter', () => {
       expect(useSandboxStore.getState().stepRequested).toBe(0)

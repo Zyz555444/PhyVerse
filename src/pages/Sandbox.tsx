@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { Scene } from '@/features/canvas/Scene'
@@ -11,6 +12,7 @@ import {
   type SandboxScene,
   type SandboxCameraView,
   type JointType,
+  type TelemetrySample,
 } from '@/features/sandbox/sandboxStore'
 import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
@@ -18,6 +20,7 @@ import { SandboxItemRenderer } from '@/features/sandbox/SandboxItemRenderer'
 import { SandboxJoints } from '@/features/sandbox/SandboxJoints'
 import { SceneHierarchyPanel } from '@/features/sandbox/SceneHierarchyPanel'
 import { HelpOverlay } from '@/features/sandbox/HelpOverlay'
+import { DataPanel } from '@/features/sandbox/DataPanel'
 import { getFriendlyName } from '@/features/sandbox/friendlyName'
 import { SANDBOX_PRESETS } from '@/features/sandbox/presets'
 import { useSandboxShortcuts } from '@/features/sandbox/useSandboxShortcuts'
@@ -37,6 +40,8 @@ import {
   RotateCcw,
   Trash2,
   Copy,
+  ClipboardCopy,
+  ClipboardPaste,
   Eraser,
   Check,
   Magnet,
@@ -98,6 +103,100 @@ function ManualStepper() {
   return null
 }
 
+/**
+ * Samples physics state of the tracked body each frame and feeds it into the
+ * telemetry store. Live readings update ~10Hz; historical samples flush ~30Hz.
+ */
+function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
+  const { world } = usePhysics()
+  const trackedId = useSandboxStore((s) => s.telemetry.trackedId)
+  const sampling = useSandboxStore((s) => s.telemetry.sampling)
+  const gravity = useSandboxStore((s) => s.gravity)
+  const items = useSandboxStore((s) => s.items)
+  const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
+  const pushSamples = useSandboxStore((s) => s.pushTelemetrySamples)
+  const setLive = useSandboxStore((s) => s.setLiveReading)
+
+  const sampleBufferRef = useRef<TelemetrySample[]>([])
+  const liveAccumRef = useRef(0)
+  const pushAccumRef = useRef(0)
+  const simTimeRef = useRef(0)
+  const prevVelRef = useRef(new THREE.Vector3())
+  const hasPrevRef = useRef(false)
+  const lastTrackedRef = useRef<string | null>(null)
+
+  // Reset local timing state when sampling toggles or tracked target changes.
+  useEffect(() => {
+    simTimeRef.current = 0
+    hasPrevRef.current = false
+    sampleBufferRef.current = []
+    pushAccumRef.current = 0
+  }, [sampling, trackedId])
+
+  useFrame((_, delta) => {
+    if (!isRunning || !world?.isReady || !trackedId) return
+    const record = world.getBody(trackedId)
+    if (!record) return
+    const item = items.find((it) => it.id === trackedId)
+    if (!item) return
+
+    if (lastTrackedRef.current !== trackedId) {
+      hasPrevRef.current = false
+      lastTrackedRef.current = trackedId
+    }
+
+    const scaledDelta = delta * timeScale
+    simTimeRef.current += scaledDelta
+
+    const rb = record.rigidBody
+    const pos = rb.translation()
+    const v = rb.linvel()
+    const speed = Math.hypot(v.x, v.y, v.z)
+    const mass = item.mass
+
+    let accel = 0
+    if (hasPrevRef.current && scaledDelta > 0) {
+      const ax = (v.x - prevVelRef.current.x) / scaledDelta
+      const ay = (v.y - prevVelRef.current.y) / scaledDelta
+      const az = (v.z - prevVelRef.current.z) / scaledDelta
+      accel = Math.hypot(ax, ay, az)
+    }
+    prevVelRef.current.set(v.x, v.y, v.z)
+    hasPrevRef.current = true
+
+    const ke = 0.5 * mass * speed * speed
+    const pe = mass * Math.abs(gravity[1]) * Math.max(0, pos.y)
+
+    const sample: TelemetrySample = {
+      t: simTimeRef.current,
+      pos: [pos.x, pos.y, pos.z],
+      vel: [v.x, v.y, v.z],
+      speed,
+      accel,
+      ke,
+      pe,
+    }
+
+    liveAccumRef.current += delta
+    if (liveAccumRef.current >= 0.1) {
+      setLive(sample)
+      liveAccumRef.current = 0
+    }
+
+    if (sampling) {
+      sampleBufferRef.current.push(sample)
+      pushAccumRef.current += scaledDelta
+      if (pushAccumRef.current >= 0.033) {
+        pushSamples(sampleBufferRef.current, pushAccumRef.current)
+        sampleBufferRef.current = []
+        pushAccumRef.current = 0
+      }
+    }
+  })
+
+  return null
+}
+
 function useFps(): number {
   const [fps, setFps] = useState(0)
   useEffect(() => {
@@ -127,6 +226,7 @@ export function Sandbox() {
   const gravity = useSandboxStore((s) => s.gravity)
   const selectedId = useSandboxStore((s) => s.selectedId)
   const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
+  const clipboard = useSandboxStore((s) => s.clipboard)
   const isGizmoDragging = useSandboxStore((s) => s.isGizmoDragging)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const ui = useSandboxStore((s) => s.ui)
@@ -146,6 +246,7 @@ export function Sandbox() {
   const setUI = useSandboxStore((s) => s.setUI)
   const addJoint = useSandboxStore((s) => s.addJoint)
   const requestStep = useSandboxStore((s) => s.requestStep)
+  const setTelemetryTracked = useSandboxStore((s) => s.setTelemetryTracked)
 
   const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -158,18 +259,34 @@ export function Sandbox() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jointMenuRef = useRef<HTMLDivElement>(null)
   const presetMenuRef = useRef<HTMLDivElement>(null)
+  const prevItemCountRef = useRef(items.length)
 
   const impulseMode = editorConfig.impulseMode
   const impulseStrength = editorConfig.impulseStrength
   const showTrajectory = editorConfig.showTrajectory
   const fps = useFps()
 
+  const physicsConfig = useMemo(() => ({ gravity }), [gravity])
+
   useEffect(() => {
     const stored = loadStoredScene()
     if (stored) {
-      loadScene(stored)
+      loadScene(stored, { pushHistory: false })
     }
   }, [loadScene])
+
+  // Auto-focus camera when a new item is added.
+  useEffect(() => {
+    if (items.length > prevItemCountRef.current && selectedId) {
+      setCameraFocusKey((k) => k + 1)
+    }
+    prevItemCountRef.current = items.length
+  }, [items.length, selectedId])
+
+  // Keep telemetry tracking in sync with the current selection.
+  useEffect(() => {
+    setTelemetryTracked(selectedId)
+  }, [selectedId, setTelemetryTracked])
 
   const debouncedSave = useDebouncedCallback((scene: SandboxScene) => {
     saveScene(scene)
@@ -228,6 +345,11 @@ export function Sandbox() {
     onToggleFullscreen: () => setUI({ isFullscreen: !ui.isFullscreen }),
     onToggleHelp: () => setUI({ isHelpOpen: !ui.isHelpOpen }),
     onStep: () => requestStep(),
+    onToggleImpulse: () => {
+      if (isRunning) {
+        setEditorConfig({ impulseMode: !impulseMode })
+      }
+    },
     isGizmoActive: () => isGizmoDragging,
     hasSelection: !!selectedId,
   })
@@ -473,6 +595,18 @@ export function Sandbox() {
           disabled={!selectedId}
         />
         <ToolButton
+          icon={ClipboardCopy}
+          onClick={() => selectedId && copyItem(selectedId)}
+          title={t('sandbox.copy')}
+          disabled={!selectedId}
+        />
+        <ToolButton
+          icon={ClipboardPaste}
+          onClick={() => pasteItem()}
+          title={t('sandbox.paste')}
+          disabled={!clipboard || clipboard.length === 0}
+        />
+        <ToolButton
           icon={Trash2}
           onClick={() => selectedId && removeItem(selectedId)}
           title={t('sandbox.delete')}
@@ -558,153 +692,160 @@ export function Sandbox() {
         </div>
       )}
 
-      <div className={cn('flex gap-2', canvasHeight)}>
-        {leftOpen && !isFullscreen && (
-          <div className="w-52 flex-shrink-0">
-            <EquipmentPalette />
-          </div>
-        )}
+      <div className={cn('flex flex-col gap-2', canvasHeight)}>
+        <div className="flex flex-1 gap-2 min-h-0">
+          {leftOpen && !isFullscreen && (
+            <div className="w-52 flex-shrink-0">
+              <EquipmentPalette />
+            </div>
+          )}
 
-        <div
-          className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
-          data-sandbox-canvas
-        >
-          <Scene
-            cameraPosition={[10, 8, 10]}
-            cameraView={editorConfig.cameraView}
-            cameraResetKey={cameraResetKey}
-            focusTarget={focusTarget}
-            focusKey={cameraFocusKey}
-            showGrid
+          <div
+            className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
+            data-sandbox-canvas
           >
-            <PhysicsProvider
-              config={{ gravity }}
-              autoStep={isRunning}
-              timeScale={editorConfig.timeScale}
+            <Scene
+              cameraPosition={[10, 8, 10]}
+              cameraView={editorConfig.cameraView}
+              cameraResetKey={cameraResetKey}
+              focusTarget={focusTarget}
+              focusKey={cameraFocusKey}
+              showGrid
             >
-              <DeselectOnEmpty onSelect={() => selectItem(null)} />
-              {!isRunning && <ManualStepper />}
-              <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
-              <SandboxJoints />
-              {items.map((item) => (
-                <SandboxItemRenderer
-                  key={item.id}
-                  item={item}
-                  selected={item.id === selectedId}
-                  multiSelected={multiSelectedIds.includes(item.id)}
-                  editingEnabled={!isRunning}
-                  gizmoMode={gizmoMode}
-                  snapEnabled={editorConfig.snapEnabled}
-                  snapSize={editorConfig.snapSize}
-                  angleSnapEnabled={editorConfig.angleSnapEnabled}
-                  angleSnapSize={editorConfig.angleSnapSize}
-                  impulseMode={impulseMode}
-                  impulseStrength={impulseStrength}
-                  showTrajectory={showTrajectory}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const native = e.nativeEvent as MouseEvent
-                    selectItem(item.id, native.ctrlKey || native.metaKey || native.shiftKey)
-                  }}
-                  onChange={(patch) => updateItem(item.id, patch)}
-                  onCommit={(patch) => {
-                    updateItem(item.id, patch)
-                    commitHistory()
-                  }}
-                />
-              ))}
-            </PhysicsProvider>
-          </Scene>
-
-          {saved && (
-            <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-paper/95 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm">
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              {t('sandbox.saved')}
-            </div>
-          )}
-
-          {!isRunning && (
-            <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
-              {t('sandbox.pausedMode')}
-            </div>
-          )}
-
-          {importError && (
-            <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-600 shadow-sm">
-              <span>{importError}</span>
-              <button
-                type="button"
-                onClick={() => setImportError(null)}
-                className="rounded-full p-0.5 hover:bg-red-100"
+              <PhysicsProvider
+                config={physicsConfig}
+                autoStep={isRunning}
+                timeScale={editorConfig.timeScale}
               >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )}
+                <DeselectOnEmpty onSelect={() => selectItem(null)} />
+                {!isRunning && <ManualStepper />}
+                <TelemetrySampler isRunning={isRunning} />
+                <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
+                <SandboxJoints />
+                {items.map((item) => (
+                  <SandboxItemRenderer
+                    key={item.id}
+                    item={item}
+                    selected={item.id === selectedId}
+                    multiSelected={multiSelectedIds.includes(item.id)}
+                    editingEnabled={!isRunning}
+                    gizmoMode={gizmoMode}
+                    snapEnabled={editorConfig.snapEnabled}
+                    snapSize={editorConfig.snapSize}
+                    angleSnapEnabled={editorConfig.angleSnapEnabled}
+                    angleSnapSize={editorConfig.angleSnapSize}
+                    impulseMode={impulseMode}
+                    impulseStrength={impulseStrength}
+                    showTrajectory={showTrajectory}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const native = e.nativeEvent as MouseEvent
+                      selectItem(item.id, native.ctrlKey || native.metaKey || native.shiftKey)
+                    }}
+                    onChange={(patch) => updateItem(item.id, patch)}
+                    onCommit={(patch) => {
+                      updateItem(item.id, patch)
+                      commitHistory()
+                    }}
+                  />
+                ))}
+              </PhysicsProvider>
+            </Scene>
 
-          {items.length === 0 && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-              <p className="text-sm text-text-tertiary">{t('sandbox.empty')}</p>
-              <div className="flex gap-3">
+            {saved && (
+              <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-paper/95 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm">
+                <Check className="h-3.5 w-3.5 text-green-500" />
+                {t('sandbox.saved')}
+              </div>
+            )}
+
+            {!isRunning && (
+              <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
+                {t('sandbox.pausedMode')}
+              </div>
+            )}
+
+            {importError && (
+              <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-1.5 text-xs font-medium text-red-600 shadow-sm">
+                <span>{importError}</span>
                 <button
                   type="button"
-                  onClick={() => setUI({ isLeftPanelOpen: true })}
-                  className="rounded-lg border border-accent bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+                  onClick={() => setImportError(null)}
+                  className="rounded-full p-0.5 hover:bg-red-100"
                 >
-                  {t('sandbox.emptyBuild')}
-                </button>
-                <div className="relative" ref={presetMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowPresetMenu((s) => !s)}
-                    className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
-                  >
-                    {t('sandbox.emptyLoadPreset')}
-                  </button>
-                  {showPresetMenu && (
-                    <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-paper py-1 shadow-lg">
-                      {SANDBOX_PRESETS.map(({ id, label, scene }) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => {
-                            loadScene(scene)
-                            setShowPresetMenu(false)
-                          }}
-                          className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setUI({ isHelpOpen: true })}
-                  className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
-                >
-                  {t('sandbox.emptyTutorial')}
+                  <X className="h-3 w-3" />
                 </button>
               </div>
-            </div>
-          )}
+            )}
 
-          {isFullscreen && (
-            <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-paper/90 px-3 py-1 text-xs text-text-tertiary shadow-sm">
-              {t('sandbox.fullscreenHint')}
+            {items.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                <p className="text-sm text-text-tertiary">{t('sandbox.empty')}</p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setUI({ isLeftPanelOpen: true })}
+                    className="rounded-lg border border-accent bg-accent-soft px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+                  >
+                    {t('sandbox.emptyBuild')}
+                  </button>
+                  <div className="relative" ref={presetMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPresetMenu((s) => !s)}
+                      className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
+                    >
+                      {t('sandbox.emptyLoadPreset')}
+                    </button>
+                    {showPresetMenu && (
+                      <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-paper py-1 shadow-lg">
+                        {SANDBOX_PRESETS.map(({ id, label, scene }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(t('sandbox.presetConfirm', { name: label }))) {
+                                loadScene(scene)
+                              }
+                              setShowPresetMenu(false)
+                            }}
+                            className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUI({ isHelpOpen: true })}
+                    className="rounded-lg border border-border bg-paper px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:border-border-strong"
+                  >
+                    {t('sandbox.emptyTutorial')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isFullscreen && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-paper/90 px-3 py-1 text-xs text-text-tertiary shadow-sm">
+                {t('sandbox.fullscreenHint')}
+              </div>
+            )}
+          </div>
+
+          {rightOpen && !isFullscreen && (
+            <div className="flex w-64 flex-shrink-0 flex-col gap-2">
+              <SceneHierarchyPanel />
+              <div className="min-h-0 flex-1">
+                <PropertiesPanel />
+              </div>
             </div>
           )}
         </div>
 
-        {rightOpen && !isFullscreen && (
-          <div className="flex w-64 flex-shrink-0 flex-col gap-2">
-            <SceneHierarchyPanel />
-            <div className="min-h-0 flex-1">
-              <PropertiesPanel />
-            </div>
-          </div>
-        )}
+        {!isFullscreen && <DataPanel />}
       </div>
 
       <HelpOverlay />

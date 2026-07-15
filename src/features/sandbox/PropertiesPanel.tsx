@@ -1,5 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
-import { Trash2, Copy, RotateCcw, Link2, Lock, Unlock, Eye, EyeOff, ArrowDownToLine } from 'lucide-react'
+import {
+  Trash2,
+  Copy,
+  RotateCcw,
+  Link2,
+  Lock,
+  Unlock,
+  Eye,
+  EyeOff,
+  ArrowDownToLine,
+} from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Slider } from '@/shared/ui/Slider'
 import { Button } from '@/shared/ui/Button'
@@ -30,13 +40,20 @@ export function PropertiesPanel() {
   const setGravity = useSandboxStore((s) => s.setGravity)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
   const removeJoint = useSandboxStore((s) => s.removeJoint)
+  const updateJoint = useSandboxStore((s) => s.updateJoint)
   const toggleLock = useSandboxStore((s) => s.toggleLock)
   const toggleVisibility = useSandboxStore((s) => s.toggleVisibility)
   const snapToGround = useSandboxStore((s) => s.snapToGround)
+  const [selectedJointId, setSelectedJointId] = useState<string | null>(null)
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) ?? null,
     [items, selectedId]
+  )
+
+  const selectedJoint = useMemo(
+    () => joints.find((joint) => joint.id === selectedJointId) ?? null,
+    [joints, selectedJointId]
   )
 
   return (
@@ -46,6 +63,7 @@ export function PropertiesPanel() {
       </h3>
 
       <GravityEditor
+        key={gravity.join(',')}
         gravity={gravity}
         onCommit={(g) => {
           setGravity(g)
@@ -162,10 +180,19 @@ export function PropertiesPanel() {
                 key={joint.id}
                 joint={joint}
                 items={items}
+                selected={joint.id === selectedJointId}
+                onSelect={() => setSelectedJointId(joint.id)}
                 onRemove={() => removeJoint(joint.id)}
               />
             ))}
           </div>
+          {selectedJoint && (
+            <JointEditor
+              key={selectedJoint.id}
+              joint={selectedJoint}
+              onCommit={(patch) => updateJoint(selectedJoint.id, patch)}
+            />
+          )}
         </section>
       )}
 
@@ -191,10 +218,12 @@ export function PropertiesPanel() {
 interface JointListItemProps {
   joint: SandboxJoint
   items: SandboxItem[]
+  selected: boolean
+  onSelect: () => void
   onRemove: () => void
 }
 
-function JointListItem({ joint, items, onRemove }: JointListItemProps) {
+function JointListItem({ joint, items, selected, onSelect, onRemove }: JointListItemProps) {
   const { t } = useI18n()
   const typeLabels: Record<string, string> = {
     spring: t('sandbox.shape.spring'),
@@ -202,9 +231,26 @@ function JointListItem({ joint, items, onRemove }: JointListItemProps) {
     fixed: t('sandbox.jointFixed'),
   }
   return (
-    <div className="flex items-center justify-between rounded-md border border-border bg-paper px-2 py-1.5 text-xs">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          onSelect()
+        }
+      }}
+      className={cn(
+        'flex w-full items-center justify-between rounded-md border px-2 py-1.5 text-xs transition-colors',
+        selected
+          ? 'border-accent bg-accent-soft'
+          : 'border-border bg-paper hover:bg-paper-tertiary/40'
+      )}
+    >
       <div className="flex items-center gap-1.5 overflow-hidden">
-        <Link2 className="h-3 w-3 shrink-0 text-text-tertiary" />
+        <Link2
+          className={cn('h-3 w-3 shrink-0', selected ? 'text-accent' : 'text-text-tertiary')}
+        />
         <span className="shrink-0 font-medium text-text-secondary">
           {typeLabels[joint.type] ?? joint.type}
         </span>
@@ -214,12 +260,107 @@ function JointListItem({ joint, items, onRemove }: JointListItemProps) {
       </div>
       <button
         type="button"
-        onClick={onRemove}
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
         className="shrink-0 rounded p-0.5 text-text-tertiary hover:text-red-500"
         title={t('sandbox.delete')}
       >
         <Trash2 className="h-3 w-3" />
       </button>
+    </div>
+  )
+}
+
+interface JointEditorProps {
+  joint: SandboxJoint
+  onCommit: (patch: Partial<SandboxJoint>) => void
+}
+
+function JointEditor({ joint, onCommit }: JointEditorProps) {
+  const { t } = useI18n()
+  const [anchorA, setAnchorA] = useState<[number, number, number]>(
+    (joint.anchorA ?? [0, 0, 0]) as [number, number, number]
+  )
+  const [anchorB, setAnchorB] = useState<[number, number, number]>(
+    (joint.anchorB ?? [0, 0, 0]) as [number, number, number]
+  )
+  const [restLength, setRestLength] = useState(joint.restLength ?? 1)
+  const [stiffness, setStiffness] = useState(joint.stiffness ?? 100)
+  const [damping, setDamping] = useState(joint.damping ?? 5)
+  const [maxDistance, setMaxDistance] = useState(joint.maxDistance ?? 1)
+
+  return (
+    <div className="mt-3 space-y-3 rounded-md border border-border bg-paper p-2.5">
+      <h5 className="text-xs font-medium text-text-secondary">{t('sandbox.jointParams')}</h5>
+
+      <Vector3Group
+        label={t('sandbox.jointAnchorA')}
+        values={anchorA}
+        min={-5}
+        max={5}
+        step={0.05}
+        onChange={setAnchorA}
+        onCommit={(v) => onCommit({ anchorA: v })}
+      />
+      <Vector3Group
+        label={t('sandbox.jointAnchorB')}
+        values={anchorB}
+        min={-5}
+        max={5}
+        step={0.05}
+        onChange={setAnchorB}
+        onCommit={(v) => onCommit({ anchorB: v })}
+      />
+
+      {joint.type === 'spring' && (
+        <>
+          <Slider
+            label={t('sandbox.jointRestLength')}
+            value={[restLength]}
+            min={0.1}
+            max={10}
+            step={0.1}
+            onValueChange={(v) => setRestLength(v[0])}
+            onValueCommit={(v) => onCommit({ restLength: v[0] })}
+            valueFormatter={(v) => `${v.toFixed(1)} m`}
+          />
+          <Slider
+            label={t('sandbox.jointStiffness')}
+            value={[stiffness]}
+            min={1}
+            max={500}
+            step={1}
+            onValueChange={(v) => setStiffness(v[0])}
+            onValueCommit={(v) => onCommit({ stiffness: v[0] })}
+            valueFormatter={(v) => `${v.toFixed(0)} N/m`}
+          />
+          <Slider
+            label={t('sandbox.jointDamping')}
+            value={[damping]}
+            min={0}
+            max={50}
+            step={0.1}
+            onValueChange={(v) => setDamping(v[0])}
+            onValueCommit={(v) => onCommit({ damping: v[0] })}
+            valueFormatter={(v) => `${v.toFixed(1)}`}
+          />
+        </>
+      )}
+
+      {joint.type === 'rope' && (
+        <Slider
+          label={t('sandbox.jointMaxDistance')}
+          value={[maxDistance]}
+          min={0.1}
+          max={10}
+          step={0.1}
+          onValueChange={(v) => setMaxDistance(v[0])}
+          onValueCommit={(v) => onCommit({ maxDistance: v[0] })}
+          valueFormatter={(v) => `${v.toFixed(1)} m`}
+        />
+      )}
     </div>
   )
 }
@@ -233,7 +374,7 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
   const { t } = useI18n()
   const [values, setValues] = useState<[number, number, number]>(gravity)
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initialRef = useRef(gravity)
+  const committedRef = useRef(gravity)
 
   const updateAxis = (idx: number, value: number) => {
     setValues((prev) => {
@@ -246,8 +387,9 @@ function GravityEditor({ gravity, onCommit }: GravityEditorProps) {
   const debouncedCommit = (newValues: [number, number, number]) => {
     if (commitTimerRef.current) clearTimeout(commitTimerRef.current)
     commitTimerRef.current = setTimeout(() => {
-      const init = initialRef.current
-      if (init[0] !== newValues[0] || init[1] !== newValues[1] || init[2] !== newValues[2]) {
+      const last = committedRef.current
+      if (last[0] !== newValues[0] || last[1] !== newValues[1] || last[2] !== newValues[2]) {
+        committedRef.current = newValues
         onCommit(newValues)
       }
     }, 300)
@@ -373,9 +515,7 @@ function SelectedItemProperties({
 
       <div className="flex items-center gap-2 text-xs">
         <span className="text-text-tertiary">{t('sandbox.shapeLabel')}</span>
-        <span className="capitalize text-text-secondary">
-          {t(`sandbox.shape.${item.shape}`)}
-        </span>
+        <span className="capitalize text-text-secondary">{t(`sandbox.shape.${item.shape}`)}</span>
         {(item.locked || item.hidden) && (
           <span className="ml-auto flex gap-1">
             {item.locked && (
