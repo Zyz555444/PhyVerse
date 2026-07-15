@@ -1,4 +1,10 @@
-import type { SandboxItem, SandboxScene, SandboxShape, SandboxJoint, TelemetrySample } from './sandboxStore'
+import type {
+  SandboxItem,
+  SandboxScene,
+  SandboxShape,
+  SandboxJoint,
+  TelemetrySample,
+} from './sandboxStore'
 
 const STORAGE_KEY = 'phyverse-sandbox-scene'
 const CURRENT_VERSION = 1

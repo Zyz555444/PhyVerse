@@ -25,6 +25,7 @@ export interface JointParams {
   maxDistance?: number
   targetVelocity?: number
   maxMotorForce?: number
+  gearRatio?: number
 }
 
 const defaultAnchor: [number, number, number] = [0, 0, 0]
