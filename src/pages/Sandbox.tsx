@@ -48,6 +48,7 @@ import { type Recipe } from '@/features/recipe/recipeTypes'
 import { MeasurementOverlay } from '@/features/measurement/MeasurementOverlay'
 import { MeasurementDataCollector } from '@/features/measurement/measurementDataStore'
 import { MeasurementToolbar } from '@/features/measurement/MeasurementToolbar'
+import { CloudSyncPanel } from '@/features/cloud/CloudSyncPanel'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
@@ -83,6 +84,7 @@ import {
   Box as BoxIcon,
   Eye,
   BarChart3,
+  Cloud,
 } from 'lucide-react'
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
@@ -277,6 +279,7 @@ export function Sandbox() {
   const [cameraFocusKey, setCameraFocusKey] = useState(0)
   const [showPresetMenu, setShowPresetMenu] = useState(false)
   const [leftTab, setLeftTab] = useState<'equipment' | 'tasks' | 'recipes'>('equipment')
+  const [cloudOpen, setCloudOpen] = useState(false)
   const [recipeState, setRecipeState] = useState<{
     activeRecipeId: string | null
     currentStepIndex: number
@@ -823,6 +826,12 @@ export function Sandbox() {
         />
         <ToolButton icon={Download} onClick={handleExport} title={t('sandbox.export')} />
         <ToolButton icon={Upload} onClick={handleImportClick} title={t('sandbox.import')} />
+        <ToolButton
+          icon={Cloud}
+          onClick={() => setCloudOpen((open) => !open)}
+          title={t('cloud.title')}
+          active={cloudOpen}
+        />
 
         <input
           ref={fileInputRef}
@@ -1133,6 +1142,23 @@ export function Sandbox() {
         </div>
 
         {!isFullscreen && !isMobile && <DataPanel />}
+        {!isFullscreen && cloudOpen && (
+          <div className="max-w-full">
+            <CloudSyncPanel
+              currentScene={{ items, gravity, joints }}
+              onLoadScene={(data) => {
+                const scene = data as {
+                  items: typeof items
+                  gravity: typeof gravity
+                  joints: typeof joints
+                }
+                loadScene(scene)
+                setCloudOpen(false)
+              }}
+              onClose={() => setCloudOpen(false)}
+            />
+          </div>
+        )}
         {!isFullscreen && (
           <div className="max-w-full">
             <MeasurementToolbar />

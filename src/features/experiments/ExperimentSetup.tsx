@@ -39,7 +39,6 @@ function ExperimentSetupInner({ experiment, params, children }: ExperimentSetupP
     }
 
     const result = experiment.setup(world, params)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSetupResult(result)
     prevResultRef.current = result
 

@@ -1,14 +1,15 @@
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from '@/shared/utils/cn'
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string
   helperText?: string
   error?: string
+  leftIcon?: ReactNode
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, helperText, error, ...props }, ref) => {
+  ({ className, label, helperText, error, leftIcon, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -17,21 +18,29 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {props.required && <span className="ml-1 text-accent">*</span>}
           </label>
         )}
-        <input
-          ref={ref}
-          className={cn(
-            'h-10 w-full rounded-lg border bg-paper px-3 text-sm text-text-primary',
-            'placeholder:text-text-tertiary',
-            'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-soft',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            error
-              ? 'border-danger focus:border-danger focus:ring-danger-soft'
-              : 'border-border hover:border-border-strong',
-            className
+        <div className="relative">
+          {leftIcon && (
+            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
+              {leftIcon}
+            </div>
           )}
-          aria-invalid={error ? 'true' : 'false'}
-          {...props}
-        />
+          <input
+            ref={ref}
+            className={cn(
+              'h-10 w-full rounded-lg border bg-paper text-sm text-text-primary',
+              leftIcon ? 'pl-10 pr-3' : 'px-3',
+              'placeholder:text-text-tertiary',
+              'focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent-soft',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              error
+                ? 'border-danger focus:border-danger focus:ring-danger-soft'
+                : 'border-border hover:border-border-strong',
+              className
+            )}
+            aria-invalid={error ? 'true' : 'false'}
+            {...props}
+          />
+        </div>
         {error ? (
           <p className="text-xs text-danger">{error}</p>
         ) : helperText ? (
