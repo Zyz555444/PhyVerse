@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from '../_lib/db'
-import { getAuthUser } from '../_lib/auth'
-import { handleCors } from '../_lib/cors'
+import { sql } from '../_lib/db.js'
+import { getAuthUser } from '../_lib/auth.js'
+import { handleCors } from '../_lib/cors.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (handleCors(req, res)) return

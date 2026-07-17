@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql, ensureTables } from '../_lib/db'
-import { verifyPassword, signToken } from '../_lib/auth'
-import { handleCors } from '../_lib/cors'
+import { sql, ensureTables } from '../_lib/db.js'
+import { verifyPassword, signToken } from '../_lib/auth.js'
+import { handleCors } from '../_lib/cors.js'
 
 interface LoginBody {
   email?: string
