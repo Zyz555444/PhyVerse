@@ -82,14 +82,15 @@ export function AuthModal() {
       open={isOpen}
       onOpenChange={setIsOpen}
       showCloseButton={false}
-      className="max-w-2xl overflow-hidden p-0"
+      className="max-w-4xl overflow-hidden p-0 md:rounded-2xl"
     >
-      <div className="grid overflow-hidden md:grid-cols-[1.1fr_1.4fr]">
+      <div className="grid min-h-[520px] overflow-hidden md:grid-cols-2">
         {/* Decorative brand panel */}
         <div
           className={cn(
-            'relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br p-8 md:flex',
-            'from-accent via-accent-hover to-accent-soft'
+            'relative hidden h-full flex-col justify-between overflow-hidden bg-gradient-to-br p-8 md:flex',
+            'from-accent via-accent-hover to-accent-soft',
+            'after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-20 after:bg-gradient-to-r after:from-transparent after:to-white/25'
           )}
         >
           <div className="relative z-10">
