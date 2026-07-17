@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
+import { useIsMobile } from '@/shared/hooks/useIsMobile'
+import { MobileBottomSheet } from '@/shared/ui/MobileBottomSheet'
 import { Scene } from '@/features/canvas/Scene'
 import { LabTable } from '@/features/canvas/LabTable'
 import { PhysicsProvider } from '@/features/physics/PhysicsProvider'
@@ -493,24 +495,34 @@ export function Sandbox() {
   const gizmoMode = editorConfig.gizmoMode
   const gizmoSpace = editorConfig.gizmoSpace
   const isFullscreen = ui.isFullscreen
-  const leftOpen = ui.isLeftPanelOpen
-  const rightOpen = ui.isRightPanelOpen
+  const isMobile = useIsMobile()
+  const leftOpen = !isMobile && ui.isLeftPanelOpen
+  const rightOpen = !isMobile && ui.isRightPanelOpen
+  const [mobileSheet, setMobileSheet] = useState<
+    'equipment' | 'tasks' | 'hierarchy' | 'properties' | null
+  >(null)
 
   const containerClass = useMemo(() => {
     if (isFullscreen) {
       return 'fixed inset-0 z-50 flex flex-col bg-paper p-2'
     }
-    return 'flex flex-col py-4'
-  }, [isFullscreen])
+    return isMobile ? 'flex flex-col py-2' : 'flex flex-col py-4'
+  }, [isFullscreen, isMobile])
 
   const canvasHeight = isFullscreen ? 'flex-1' : 'h-[calc(100vh-180px)] min-h-[400px]'
 
   return (
     <div className={containerClass}>
       {/* Compact toolbar */}
-      <div className={cn('mb-2 flex flex-wrap items-center gap-2', isFullscreen && 'px-1 pt-1')}>
-        <div className="flex items-center gap-2">
-          {!isFullscreen && (
+      <div
+        className={cn(
+          'mb-2 flex items-center gap-2',
+          isMobile ? 'overflow-x-auto flex-nowrap' : 'flex-wrap',
+          isFullscreen && 'px-1 pt-1'
+        )}
+      >
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!isFullscreen && !isMobile && (
             <h1 className="font-heading text-xl text-text-primary">{t('nav.sandbox')}</h1>
           )}
           <Button
@@ -757,12 +769,34 @@ export function Sandbox() {
         />
 
         <div className="ml-auto flex items-center gap-1">
+          {isMobile && (
+            <>
+              <ToolButton
+                icon={BoxIcon}
+                onClick={() => setMobileSheet(mobileSheet === 'equipment' ? null : 'equipment')}
+                title={t('sandbox.equipment')}
+                active={mobileSheet === 'equipment'}
+              />
+              <ToolButton
+                icon={PanelLeftOpen}
+                onClick={() => setMobileSheet(mobileSheet === 'hierarchy' ? null : 'hierarchy')}
+                title={t('sandbox.hierarchy')}
+                active={mobileSheet === 'hierarchy'}
+              />
+              <ToolButton
+                icon={PanelRightOpen}
+                onClick={() => setMobileSheet(mobileSheet === 'properties' ? null : 'properties')}
+                title={t('sandbox.properties')}
+                active={mobileSheet === 'properties'}
+              />
+            </>
+          )}
           <ToolButton
             icon={HelpCircle}
             onClick={() => setUI({ isHelpOpen: !ui.isHelpOpen })}
             title={t('sandbox.help')}
           />
-          {!isFullscreen && (
+          {!isFullscreen && !isMobile && (
             <>
               <ToolButton
                 icon={leftOpen ? PanelLeftClose : PanelLeftOpen}
@@ -1025,6 +1059,64 @@ export function Sandbox() {
 
       <AITutorPanel />
       <HelpOverlay />
+
+      {/* Mobile bottom sheets */}
+      <MobileBottomSheet
+        open={isMobile && mobileSheet === 'equipment'}
+        onClose={() => setMobileSheet(null)}
+        title={leftTab === 'equipment' ? t('sandbox.equipment') : t('sandbox.taskLibrary')}
+      >
+        <div className="flex rounded-lg border border-border bg-paper p-0.5 mb-2">
+          {(
+            [
+              ['equipment', 'sandbox.equipment'],
+              ['tasks', 'sandbox.taskLibrary'],
+            ] as const
+          ).map(([tab, labelKey]) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setLeftTab(tab)}
+              className={cn(
+                'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                leftTab === tab
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+              )}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+        {leftTab === 'equipment' ? (
+          <EquipmentPalette />
+        ) : (
+          <TaskPanel
+            onStartTask={handleStartTask}
+            onExitTask={handleExitTask}
+            onAdvanceStep={advanceTaskStep}
+            onResetStep={resetTaskStep}
+            onAddRecord={handleAddRecord}
+            onExportRecords={handleExportRecords}
+          />
+        )}
+      </MobileBottomSheet>
+
+      <MobileBottomSheet
+        open={isMobile && mobileSheet === 'hierarchy'}
+        onClose={() => setMobileSheet(null)}
+        title={t('sandbox.hierarchy')}
+      >
+        <SceneHierarchyPanel />
+      </MobileBottomSheet>
+
+      <MobileBottomSheet
+        open={isMobile && mobileSheet === 'properties'}
+        onClose={() => setMobileSheet(null)}
+        title={t('sandbox.properties')}
+      >
+        <PropertiesPanel />
+      </MobileBottomSheet>
     </div>
   )
 }
