@@ -43,6 +43,8 @@ import { ForceVisualizer } from '@/features/sandbox/ForceVisualizer'
 import { EnergyBar } from '@/features/sandbox/EnergyBar'
 import { ForceFieldRenderer } from '@/features/sandbox/ForceFieldRenderer'
 import { AITutorPanel } from '@/ai/AITutorPanel'
+import { RecipePanel } from '@/features/recipe/RecipePanel'
+import { type Recipe } from '@/features/recipe/recipeTypes'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
@@ -271,7 +273,12 @@ export function Sandbox() {
   const [showJointMenu, setShowJointMenu] = useState(false)
   const [cameraFocusKey, setCameraFocusKey] = useState(0)
   const [showPresetMenu, setShowPresetMenu] = useState(false)
-  const [leftTab, setLeftTab] = useState<'equipment' | 'tasks'>('equipment')
+  const [leftTab, setLeftTab] = useState<'equipment' | 'tasks' | 'recipes'>('equipment')
+  const [recipeState, setRecipeState] = useState<{
+    activeRecipeId: string | null
+    currentStepIndex: number
+    completedRecipeIds: string[]
+  }>({ activeRecipeId: null, currentStepIndex: 0, completedRecipeIds: [] })
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const jointMenuRef = useRef<HTMLDivElement>(null)
@@ -438,6 +445,49 @@ export function Sandbox() {
   const handleExitTask = () => {
     exitTask()
     setLeftTab('equipment')
+  }
+
+  const handleStartRecipe = (recipe: Recipe) => {
+    loadScene(recipe.scene)
+    setRecipeState({
+      activeRecipeId: recipe.id,
+      currentStepIndex: 0,
+      completedRecipeIds: recipeState.completedRecipeIds,
+    })
+    clearTelemetry()
+    setLeftTab('recipes')
+    setIsRunning(false)
+    const tracked =
+      recipe.scene.items.find((it) => it.isDynamic)?.id ?? recipe.scene.items[0]?.id ?? null
+    if (tracked) {
+      selectItem(tracked)
+    }
+  }
+
+  const handleExitRecipe = () => {
+    setRecipeState((prev) => ({
+      ...prev,
+      completedRecipeIds: prev.activeRecipeId
+        ? [...new Set([...prev.completedRecipeIds, prev.activeRecipeId])]
+        : prev.completedRecipeIds,
+      activeRecipeId: null,
+      currentStepIndex: 0,
+    }))
+    setLeftTab('equipment')
+  }
+
+  const handleAdvanceRecipeStep = () => {
+    setRecipeState((prev) => ({
+      ...prev,
+      currentStepIndex: prev.currentStepIndex + 1,
+    }))
+  }
+
+  const handleResetRecipeStep = () => {
+    setRecipeState((prev) => ({
+      ...prev,
+      currentStepIndex: 0,
+    }))
   }
 
   const handleAddRecord = () => {
@@ -850,6 +900,7 @@ export function Sandbox() {
                   [
                     ['equipment', 'sandbox.equipment'],
                     ['tasks', 'sandbox.taskLibrary'],
+                    ['recipes', 'recipe.library'],
                   ] as const
                 ).map(([tab, labelKey]) => (
                   <button
@@ -870,6 +921,16 @@ export function Sandbox() {
               <div className="min-h-0 flex-1 overflow-hidden">
                 {leftTab === 'equipment' ? (
                   <EquipmentPalette />
+                ) : leftTab === 'recipes' ? (
+                  <RecipePanel
+                    onStartRecipe={handleStartRecipe}
+                    onExitRecipe={handleExitRecipe}
+                    activeRecipeId={recipeState.activeRecipeId}
+                    currentStepIndex={recipeState.currentStepIndex}
+                    completedRecipeIds={recipeState.completedRecipeIds}
+                    onAdvanceStep={handleAdvanceRecipeStep}
+                    onResetStep={handleResetRecipeStep}
+                  />
                 ) : (
                   <TaskPanel
                     onStartTask={handleStartTask}
@@ -1064,13 +1125,20 @@ export function Sandbox() {
       <MobileBottomSheet
         open={isMobile && mobileSheet === 'equipment'}
         onClose={() => setMobileSheet(null)}
-        title={leftTab === 'equipment' ? t('sandbox.equipment') : t('sandbox.taskLibrary')}
+        title={
+          leftTab === 'equipment'
+            ? t('sandbox.equipment')
+            : leftTab === 'recipes'
+              ? t('recipe.library')
+              : t('sandbox.taskLibrary')
+        }
       >
         <div className="flex rounded-lg border border-border bg-paper p-0.5 mb-2">
           {(
             [
               ['equipment', 'sandbox.equipment'],
               ['tasks', 'sandbox.taskLibrary'],
+              ['recipes', 'recipe.library'],
             ] as const
           ).map(([tab, labelKey]) => (
             <button
@@ -1090,6 +1158,16 @@ export function Sandbox() {
         </div>
         {leftTab === 'equipment' ? (
           <EquipmentPalette />
+        ) : leftTab === 'recipes' ? (
+          <RecipePanel
+            onStartRecipe={handleStartRecipe}
+            onExitRecipe={handleExitRecipe}
+            activeRecipeId={recipeState.activeRecipeId}
+            currentStepIndex={recipeState.currentStepIndex}
+            completedRecipeIds={recipeState.completedRecipeIds}
+            onAdvanceStep={handleAdvanceRecipeStep}
+            onResetStep={handleResetRecipeStep}
+          />
         ) : (
           <TaskPanel
             onStartTask={handleStartTask}
