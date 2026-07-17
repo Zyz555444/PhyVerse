@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from '../_lib/db'
+import { sql, ensureTables } from '../_lib/db'
 import { getAuthUser } from '../_lib/auth'
 import { handleCors } from '../_lib/cors'
 import { getPublicKey, rsaDecrypt, aesEncrypt } from '../_lib/crypto'
@@ -21,6 +21,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
+
+  await ensureTables()
 
   if (req.method === 'GET') {
     // Return public key for client-side RSA encryption

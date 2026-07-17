@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql } from '../_lib/db'
+import { sql, ensureTables } from '../_lib/db'
 import { getAuthUser } from '../_lib/auth'
 import { handleCors } from '../_lib/cors'
 import { aesDecrypt } from '../_lib/crypto'
@@ -42,6 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   try {
+    await ensureTables()
+
     const configResult = await sql`
       SELECT provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag
       FROM ai_configs

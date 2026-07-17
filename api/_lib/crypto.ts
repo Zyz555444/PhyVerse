@@ -1,25 +1,40 @@
 import crypto from 'crypto'
 
-const RSA_PRIVATE_KEY_BASE64 = process.env.RSA_PRIVATE_KEY_BASE64
-const RSA_PUBLIC_KEY_BASE64 = process.env.RSA_PUBLIC_KEY_BASE64
-const AI_KEY_ENCRYPTION_KEY_BASE64 = process.env.AI_KEY_ENCRYPTION_KEY_BASE64
+let _publicKey: string | null = null
+let _privateKey: string | null = null
+let _aesKey: Buffer | null = null
 
-if (!RSA_PRIVATE_KEY_BASE64 || !RSA_PUBLIC_KEY_BASE64) {
-  throw new Error(
-    'RSA_PRIVATE_KEY_BASE64 and RSA_PUBLIC_KEY_BASE64 environment variables are required'
-  )
-}
+function ensureKeys(): void {
+  if (_publicKey && _privateKey && _aesKey) return
 
-if (!AI_KEY_ENCRYPTION_KEY_BASE64) {
-  throw new Error('AI_KEY_ENCRYPTION_KEY_BASE64 environment variable is required')
-}
+  const rsaPrivateBase64 = process.env.RSA_PRIVATE_KEY_BASE64
+  const rsaPublicBase64 = process.env.RSA_PUBLIC_KEY_BASE64
+  const aesKeyBase64 = process.env.AI_KEY_ENCRYPTION_KEY_BASE64
 
-const privateKey = Buffer.from(RSA_PRIVATE_KEY_BASE64, 'base64').toString('utf-8')
-const publicKey = Buffer.from(RSA_PUBLIC_KEY_BASE64, 'base64').toString('utf-8')
-const aesKey = Buffer.from(AI_KEY_ENCRYPTION_KEY_BASE64, 'base64')
+  if (rsaPrivateBase64 && rsaPublicBase64) {
+    _privateKey = Buffer.from(rsaPrivateBase64, 'base64').toString('utf-8')
+    _publicKey = Buffer.from(rsaPublicBase64, 'base64').toString('utf-8')
+  } else {
+    // Generate RSA key pair on-the-fly when env vars are not set
+    console.warn('[crypto] RSA keys not set in env, generating ephemeral key pair')
+    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    })
+    _privateKey = privateKey
+    _publicKey = publicKey
+  }
 
-if (aesKey.length !== 32) {
-  throw new Error('AI_KEY_ENCRYPTION_KEY_BASE64 must decode to 32 bytes')
+  if (aesKeyBase64) {
+    _aesKey = Buffer.from(aesKeyBase64, 'base64')
+    if (_aesKey.length !== 32) {
+      throw new Error('AI_KEY_ENCRYPTION_KEY_BASE64 must decode to 32 bytes')
+    }
+  } else {
+    console.warn('[crypto] AES key not set in env, generating ephemeral key')
+    _aesKey = crypto.randomBytes(32)
+  }
 }
 
 export interface EncryptedKeyBundle {
@@ -29,14 +44,16 @@ export interface EncryptedKeyBundle {
 }
 
 export function getPublicKey(): string {
-  return publicKey
+  ensureKeys()
+  return _publicKey!
 }
 
 export function rsaDecrypt(base64CipherText: string): string {
+  ensureKeys()
   const buffer = Buffer.from(base64CipherText, 'base64')
   const decrypted = crypto.privateDecrypt(
     {
-      key: privateKey,
+      key: _privateKey!,
       padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
       oaepHash: 'sha256',
     },
@@ -46,8 +63,9 @@ export function rsaDecrypt(base64CipherText: string): string {
 }
 
 export function aesEncrypt(plainText: string): EncryptedKeyBundle {
+  ensureKeys()
   const iv = crypto.randomBytes(16)
-  const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv)
+  const cipher = crypto.createCipheriv('aes-256-gcm', _aesKey!, iv)
   const encrypted = Buffer.concat([cipher.update(plainText, 'utf-8'), cipher.final()])
   const tag = cipher.getAuthTag()
   return {
@@ -58,7 +76,12 @@ export function aesEncrypt(plainText: string): EncryptedKeyBundle {
 }
 
 export function aesDecrypt(bundle: EncryptedKeyBundle): string {
-  const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, Buffer.from(bundle.iv, 'base64'))
+  ensureKeys()
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    _aesKey!,
+    Buffer.from(bundle.iv, 'base64')
+  )
   decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'))
   const decrypted = Buffer.concat([
     decipher.update(Buffer.from(bundle.encrypted, 'base64')),
