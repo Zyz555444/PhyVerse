@@ -499,6 +499,47 @@ const translations: Record<Language, Record<string, string>> = {
     'cloud.updateError': '更新场景失败',
     'cloud.deleteError': '删除场景失败',
     'cloud.deleteConfirm': '确定要删除这个场景吗？此操作不可撤销。',
+
+    // AI Agent
+    'ai.agent.title': 'AI 实验助手',
+    'ai.agent.noConfig': '未配置 AI',
+    'ai.agent.signInRequired': '登录后即可使用 AI 实验助手',
+    'ai.agent.welcome': '我是你的 AI 实验助手',
+    'ai.agent.hint': '我可以帮你搭建模型、运行模拟、读取数据并回答物理问题',
+    'ai.agent.inputPlaceholder': '输入指令，例如：帮我搭建一个斜坡实验',
+    'ai.agent.settings': 'AI 设置',
+    'ai.agent.clear': '清空对话',
+    'ai.agent.configRequired': '请先在设置中配置 AI Provider',
+    'ai.agent.configureNow': '立即配置 AI',
+    'ai.agent.quickBuildRamp': '搭建一个斜坡实验',
+    'ai.agent.quickEnergy': '分析当前能量变化',
+    'ai.agent.quickRun': '运行并观察 5 秒',
+    'ai.agent.impulseNotAvailable':
+      '冲量操作需要通过物理引擎执行，当前仅支持在运行中通过场景交互施加',
+
+    // AI Settings
+    'ai.settings.title': 'AI 设置',
+    'ai.settings.subtitle': '配置你自己的 AI Provider，所有密钥均通过 RSA-256 加密后安全存储',
+    'ai.settings.signInRequired': '登录后即可配置 AI Provider',
+    'ai.settings.provider': 'Provider',
+    'ai.settings.endpoint': 'API Endpoint',
+    'ai.settings.endpointHint': 'OpenAI 兼容的 chat completions 接口地址',
+    'ai.settings.model': '模型名称',
+    'ai.settings.apiKey': 'API Key',
+    'ai.settings.encryptionHint':
+      'API Key 在浏览器端通过 RSA-256 加密后传输，服务端使用 AES-256-GCM 加密存储，明文密钥不会持久化。',
+    'ai.settings.lastSaved': '上次保存',
+    'ai.settings.save': '保存配置',
+    'ai.settings.test': '测试连接',
+    'ai.settings.delete': '删除配置',
+    'ai.settings.allFieldsRequired': '请填写 Endpoint、Model 和 API Key',
+    'ai.settings.saveSuccess': 'AI 配置已保存到云端',
+    'ai.settings.saveError': '保存失败',
+    'ai.settings.testSuccess': '连接成功',
+    'ai.settings.testError': '连接失败',
+    'ai.settings.deleteSuccess': 'AI 配置已删除',
+    'ai.settings.deleteError': '删除失败',
+    'ai.settings.deleteConfirm': '确定要删除 AI 配置吗？此操作不可撤销。',
   },
   en: {
     'app.name': 'PhyVerse',
@@ -1024,6 +1065,50 @@ const translations: Record<Language, Record<string, string>> = {
     'cloud.deleteError': 'Failed to delete scene',
     'cloud.deleteConfirm':
       'Are you sure you want to delete this scene? This action cannot be undone.',
+
+    // AI Agent
+    'ai.agent.title': 'AI Lab Assistant',
+    'ai.agent.noConfig': 'AI not configured',
+    'ai.agent.signInRequired': 'Sign in to use the AI lab assistant',
+    'ai.agent.welcome': 'I am your AI lab assistant',
+    'ai.agent.hint':
+      'I can build models, run simulations, read measurements, and answer physics questions',
+    'ai.agent.inputPlaceholder': 'Type a command, e.g. build a ramp experiment',
+    'ai.agent.settings': 'AI Settings',
+    'ai.agent.clear': 'Clear chat',
+    'ai.agent.configRequired': 'Please configure an AI provider in settings first',
+    'ai.agent.configureNow': 'Configure AI now',
+    'ai.agent.quickBuildRamp': 'Build a ramp experiment',
+    'ai.agent.quickEnergy': 'Analyze current energy changes',
+    'ai.agent.quickRun': 'Run and observe for 5 seconds',
+    'ai.agent.impulseNotAvailable':
+      'Impulse application requires the physics engine; currently only supported via scene interaction while running',
+
+    // AI Settings
+    'ai.settings.title': 'AI Settings',
+    'ai.settings.subtitle':
+      'Configure your own AI provider. All keys are encrypted with RSA-256 before secure storage',
+    'ai.settings.signInRequired': 'Sign in to configure an AI provider',
+    'ai.settings.provider': 'Provider',
+    'ai.settings.endpoint': 'API Endpoint',
+    'ai.settings.endpointHint': 'OpenAI-compatible chat completions endpoint',
+    'ai.settings.model': 'Model Name',
+    'ai.settings.apiKey': 'API Key',
+    'ai.settings.encryptionHint':
+      'API Key is encrypted with RSA-256 in the browser before transmission, then stored with AES-256-GCM on the server. Plaintext keys are never persisted.',
+    'ai.settings.lastSaved': 'Last saved',
+    'ai.settings.save': 'Save Config',
+    'ai.settings.test': 'Test Connection',
+    'ai.settings.delete': 'Delete Config',
+    'ai.settings.allFieldsRequired': 'Please fill in Endpoint, Model and API Key',
+    'ai.settings.saveSuccess': 'AI config saved to cloud',
+    'ai.settings.saveError': 'Failed to save',
+    'ai.settings.testSuccess': 'Connection successful',
+    'ai.settings.testError': 'Connection failed',
+    'ai.settings.deleteSuccess': 'AI config deleted',
+    'ai.settings.deleteError': 'Failed to delete',
+    'ai.settings.deleteConfirm':
+      'Are you sure you want to delete the AI config? This action cannot be undone.',
   },
 }
 

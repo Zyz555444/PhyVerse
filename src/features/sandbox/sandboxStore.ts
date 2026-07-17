@@ -200,8 +200,14 @@ interface SandboxState extends SandboxScene {
   task: TaskState
   /** Recording and playback state. */
   recording: RecordingState
+  /** Whether the physics simulation is currently running. */
+  isRunning: boolean
 
-  addItem: (shape: SandboxShape, position?: [number, number, number]) => void
+  addItem: (
+    shape: SandboxShape,
+    position?: [number, number, number],
+    patch?: Partial<SandboxItem>
+  ) => string
   removeItem: (id: string) => void
   selectItem: (id: string | null, multi?: boolean) => void
   selectItems: (ids: string[], multi?: boolean) => void
@@ -261,6 +267,7 @@ interface SandboxState extends SandboxScene {
   setPlaybackSpeed: (speed: number) => void
   startPlayback: () => void
   stopPlayback: () => void
+  setRunning: (running: boolean) => void
 }
 
 const DEFAULT_COLORS: { [K in SandboxShape]: string } = {
@@ -439,17 +446,22 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     playbackSpeed: 1,
     fps: 30,
   },
+  isRunning: false,
 
-  addItem: (shape, position) =>
+  addItem: (shape, position, patch) => {
+    let newItemId = ''
     set((state) => {
-      const newItem = createDefaultItem(shape, position)
+      const newItem = { ...createDefaultItem(shape, position), ...patch }
+      newItemId = newItem.id
       return {
         items: [...state.items, newItem],
         selectedId: newItem.id,
         multiSelectedIds: [],
         history: pushHistory(state),
       }
-    }),
+    })
+    return newItemId
+  },
 
   removeItem: (id) =>
     set((state) => {
@@ -639,6 +651,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       selectedId: null,
       multiSelectedIds: [],
       gravity: DEFAULT_GRAVITY,
+      isRunning: false,
       history: pushHistory(state),
       telemetry: {
         samples: [],
@@ -997,6 +1010,11 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
         ...state.recording,
         isPlaying: false,
       },
+    })),
+
+  setRunning: (running) =>
+    set(() => ({
+      isRunning: running,
     })),
 }))
 

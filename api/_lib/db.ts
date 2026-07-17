@@ -33,6 +33,21 @@ export async function ensureTables(): Promise<void> {
     );
   `
   await sql`
-    CREATE INDEX IF NOT EXISTS idx_scenes_user_id ON scenes(user_id);
-  `
+      CREATE INDEX IF NOT EXISTS idx_scenes_user_id ON scenes(user_id);
+    `
+  await sql`
+      CREATE TABLE IF NOT EXISTS ai_configs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        endpoint TEXT NOT NULL,
+        model TEXT NOT NULL,
+        api_key_encrypted TEXT NOT NULL,
+        api_key_iv TEXT NOT NULL,
+        api_key_tag TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(user_id)
+      );
+    `
 }

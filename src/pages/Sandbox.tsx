@@ -42,7 +42,8 @@ import { PlaybackRunner } from '@/features/recording/PlaybackRunner'
 import { ForceVisualizer } from '@/features/sandbox/ForceVisualizer'
 import { EnergyBar } from '@/features/sandbox/EnergyBar'
 import { ForceFieldRenderer } from '@/features/sandbox/ForceFieldRenderer'
-import { AITutorPanel } from '@/ai/AITutorPanel'
+import { AiAgentPanel } from '@/features/ai/AiAgentPanel'
+import { AiSettingsModal } from '@/features/ai/AiSettingsModal'
 import { RecipePanel } from '@/features/recipe/RecipePanel'
 import { type Recipe } from '@/features/recipe/recipeTypes'
 import { MeasurementOverlay } from '@/features/measurement/MeasurementOverlay'
@@ -270,8 +271,9 @@ export function Sandbox() {
   const taskState = useSandboxStore((s) => s.task)
   const telemetry = useSandboxStore((s) => s.telemetry)
   const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
+  const isRunning = useSandboxStore((s) => s.isRunning)
+  const setRunning = useSandboxStore((s) => s.setRunning)
 
-  const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [cameraResetKey, setCameraResetKey] = useState(0)
@@ -280,6 +282,7 @@ export function Sandbox() {
   const [showPresetMenu, setShowPresetMenu] = useState(false)
   const [leftTab, setLeftTab] = useState<'equipment' | 'tasks' | 'recipes'>('equipment')
   const [cloudOpen, setCloudOpen] = useState(false)
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [recipeState, setRecipeState] = useState<{
     activeRecipeId: string | null
     currentStepIndex: number
@@ -360,7 +363,7 @@ export function Sandbox() {
   }, [showPresetMenu])
 
   useSandboxShortcuts({
-    onRunToggle: () => setIsRunning((r) => !r),
+    onRunToggle: () => setRunning(!isRunning),
     onDelete: () => {
       if (selectedId) removeItem(selectedId)
     },
@@ -440,7 +443,7 @@ export function Sandbox() {
     startTask(task.id)
     clearTelemetry()
     setLeftTab('tasks')
-    setIsRunning(false)
+    setRunning(false)
     const tracked =
       task.scene.items.find((it) => it.isDynamic)?.id ?? task.scene.items[0]?.id ?? null
     if (tracked) {
@@ -462,7 +465,7 @@ export function Sandbox() {
     })
     clearTelemetry()
     setLeftTab('recipes')
-    setIsRunning(false)
+    setRunning(false)
     const tracked =
       recipe.scene.items.find((it) => it.isDynamic)?.id ?? recipe.scene.items[0]?.id ?? null
     if (tracked) {
@@ -597,7 +600,7 @@ export function Sandbox() {
             variant={isPlaying ? 'primary' : isRunning ? 'secondary' : 'primary'}
             onClick={() => {
               if (isPlaying) return
-              setIsRunning((r) => !r)
+              setRunning(!isRunning)
             }}
             disabled={isPlaying}
             leftIcon={
@@ -1137,6 +1140,9 @@ export function Sandbox() {
               <div className="min-h-0 flex-1">
                 <PropertiesPanel />
               </div>
+              <div className="max-h-[320px] min-h-0 flex-shrink-0">
+                <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
+              </div>
             </div>
           )}
         </div>
@@ -1166,7 +1172,7 @@ export function Sandbox() {
         )}
       </div>
 
-      <AITutorPanel />
+      <AiSettingsModal open={aiSettingsOpen} onOpenChange={setAiSettingsOpen} />
       <HelpOverlay />
 
       {/* Mobile bottom sheets */}
