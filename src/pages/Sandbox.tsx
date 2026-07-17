@@ -34,6 +34,13 @@ import {
 } from '@/features/sandbox/sceneStorage'
 import { TaskPanel } from '@/features/sandbox/TaskPanel'
 import { useTaskMonitor } from '@/features/sandbox/useTaskMonitor'
+import { RecorderSampler } from '@/features/recording/RecorderSampler'
+import { RecorderControls } from '@/features/recording/RecorderControls'
+import { PlaybackRunner } from '@/features/recording/PlaybackRunner'
+import { ForceVisualizer } from '@/features/sandbox/ForceVisualizer'
+import { EnergyBar } from '@/features/sandbox/EnergyBar'
+import { ForceFieldRenderer } from '@/features/sandbox/ForceFieldRenderer'
+import { AITutorPanel } from '@/ai/AITutorPanel'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
@@ -67,6 +74,8 @@ import {
   HelpCircle,
   Route,
   Box as BoxIcon,
+  Eye,
+  BarChart3,
 } from 'lucide-react'
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
@@ -251,6 +260,7 @@ export function Sandbox() {
   const clearTelemetry = useSandboxStore((s) => s.clearTelemetry)
   const taskState = useSandboxStore((s) => s.task)
   const telemetry = useSandboxStore((s) => s.telemetry)
+  const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
 
   const [isRunning, setIsRunning] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -271,6 +281,8 @@ export function Sandbox() {
   const impulseMode = editorConfig.impulseMode
   const impulseStrength = editorConfig.impulseStrength
   const showTrajectory = editorConfig.showTrajectory
+  const showForceVectors = editorConfig.showForceVectors
+  const showEnergyBar = editorConfig.showEnergyBar
   const fps = useFps()
 
   const physicsConfig = useMemo(() => ({ gravity }), [gravity])
@@ -503,13 +515,23 @@ export function Sandbox() {
           )}
           <Button
             size="sm"
-            variant={isRunning ? 'secondary' : 'primary'}
-            onClick={() => setIsRunning((r) => !r)}
+            variant={isPlaying ? 'primary' : isRunning ? 'secondary' : 'primary'}
+            onClick={() => {
+              if (isPlaying) return
+              setIsRunning((r) => !r)
+            }}
+            disabled={isPlaying}
             leftIcon={
-              isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />
+              isPlaying ? (
+                <Play className="h-3.5 w-3.5" />
+              ) : isRunning ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )
             }
           >
-            {isRunning ? t('sandbox.pause') : t('sandbox.run')}
+            {isPlaying ? t('sandbox.playing') : isRunning ? t('sandbox.pause') : t('sandbox.run')}
           </Button>
         </div>
 
@@ -596,6 +618,18 @@ export function Sandbox() {
               onClick={() => setEditorConfig({ showTrajectory: !showTrajectory })}
               title={t('sandbox.trajectory')}
               active={showTrajectory}
+            />
+            <ToolButton
+              icon={Eye}
+              onClick={() => setEditorConfig({ showForceVectors: !showForceVectors })}
+              title={t('sandbox.forceVectors')}
+              active={showForceVectors}
+            />
+            <ToolButton
+              icon={BarChart3}
+              onClick={() => setEditorConfig({ showEnergyBar: !showEnergyBar })}
+              title={t('sandbox.energyBar')}
+              active={showEnergyBar}
             />
           </div>
         )}
@@ -830,11 +864,16 @@ export function Sandbox() {
             >
               <PhysicsProvider
                 config={physicsConfig}
-                autoStep={isRunning}
+                autoStep={isRunning && !isPlaying}
                 timeScale={editorConfig.timeScale}
               >
                 {!isRunning && <ManualStepper />}
                 <TelemetrySampler isRunning={isRunning} />
+                <RecorderSampler isRunning={isRunning} />
+                <PlaybackRunner />
+                <ForceVisualizer isRunning={isRunning} />
+                <EnergyBar isRunning={isRunning} />
+                <ForceFieldRenderer isRunning={isRunning} />
                 <BoxSelection />
                 <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
                 <SandboxJoints />
@@ -893,7 +932,9 @@ export function Sandbox() {
               </div>
             )}
 
-            {!isRunning && (
+            <RecorderControls />
+
+            {!isRunning && !isPlaying && (
               <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
                 {t('sandbox.pausedMode')}
               </div>
@@ -982,6 +1023,7 @@ export function Sandbox() {
         {!isFullscreen && <DataPanel />}
       </div>
 
+      <AITutorPanel />
       <HelpOverlay />
     </div>
   )

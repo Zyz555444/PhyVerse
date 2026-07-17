@@ -19,6 +19,7 @@ import {
   Ruler,
   BrickWall,
   Weight,
+  Atom,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -39,6 +40,7 @@ const SHAPE_ICON: Record<SandboxShape, LucideIcon> = {
   slope: Ruler,
   barrier: BrickWall,
   force_meter: Weight,
+  force_field: Atom,
 }
 
 export function SceneHierarchyPanel() {

@@ -13,6 +13,7 @@ const SHAPE_LABELS_ZH: Record<SandboxShape, string> = {
   slope: '斜面',
   barrier: '挡板',
   force_meter: '弹簧测力计',
+  force_field: '力场源',
 }
 
 export function getShapeLabelZh(shape: SandboxShape): string {

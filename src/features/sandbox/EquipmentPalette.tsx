@@ -12,6 +12,7 @@ import {
   Ruler,
   BrickWall,
   Weight,
+  Atom,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -40,6 +41,7 @@ const equipmentItems: PaletteItem[] = [
   { shape: 'slope', icon: Ruler },
   { shape: 'barrier', icon: BrickWall },
   { shape: 'force_meter', icon: Weight },
+  { shape: 'force_field', icon: Atom },
 ]
 
 export function EquipmentPalette() {

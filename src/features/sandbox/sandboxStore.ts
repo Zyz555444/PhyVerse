@@ -17,6 +17,7 @@ export type SandboxShape =
   | 'slope'
   | 'barrier'
   | 'force_meter'
+  | 'force_field'
 
 export type SandboxCameraView = 'free' | 'top' | 'front' | 'side'
 export type GizmoMode = 'translate' | 'rotate' | 'scale'
@@ -95,6 +96,10 @@ export interface SandboxEditorConfig {
   showVelocityVector: boolean
   /** Show acceleration vector arrows on dynamic bodies while running. */
   showAccelerationVector: boolean
+  /** Show force decomposition vectors (gravity, normal, friction, spring) on dynamic bodies. */
+  showForceVectors: boolean
+  /** Show energy bar (KE/PE) overlay on dynamic bodies. */
+  showEnergyBar: boolean
 }
 
 /** A single physics sample for the currently tracked body. */
@@ -110,6 +115,30 @@ export interface TelemetrySample {
   ke: number
   /** Gravitational potential energy relative to y=0 (J). */
   pe: number
+}
+
+/** A single recorded frame of the entire scene for playback. */
+export interface RecordedFrame {
+  /** Simulation time in seconds. */
+  time: number
+  /** Body states keyed by item id. */
+  bodies: Record<string, RecordedBodyState>
+}
+
+export interface RecordedBodyState {
+  position: [number, number, number]
+  /** Quaternion rotation [x, y, z, w]. */
+  rotation: [number, number, number, number]
+  velocity: [number, number, number]
+}
+
+export interface RecordingState {
+  isRecording: boolean
+  isPlaying: boolean
+  frames: RecordedFrame[]
+  currentFrameIndex: number
+  playbackSpeed: number
+  fps: number
 }
 
 export interface TelemetryState {
@@ -169,6 +198,8 @@ interface SandboxState extends SandboxScene {
   telemetry: TelemetryState
   /** Active teaching task state. */
   task: TaskState
+  /** Recording and playback state. */
+  recording: RecordingState
 
   addItem: (shape: SandboxShape, position?: [number, number, number]) => void
   removeItem: (id: string) => void
@@ -221,6 +252,15 @@ interface SandboxState extends SandboxScene {
   addTaskRecord: (record: TaskRecord) => void
   /** Remove all captured records for the active task. */
   clearTaskRecords: () => void
+  /** Recording actions. */
+  startRecording: (fps?: number) => void
+  stopRecording: () => void
+  pushRecordedFrame: (frame: RecordedFrame) => void
+  clearRecording: () => void
+  setPlaybackFrame: (index: number) => void
+  setPlaybackSpeed: (speed: number) => void
+  startPlayback: () => void
+  stopPlayback: () => void
 }
 
 const DEFAULT_COLORS: { [K in SandboxShape]: string } = {
@@ -236,6 +276,7 @@ const DEFAULT_COLORS: { [K in SandboxShape]: string } = {
   slope: '#d4c8a8',
   barrier: '#94a3b8',
   force_meter: '#f59e0b',
+  force_field: '#8b5cf6',
 }
 
 const DEFAULT_SIZES: { [K in SandboxShape]: [number, number, number] } = {
@@ -251,6 +292,7 @@ const DEFAULT_SIZES: { [K in SandboxShape]: [number, number, number] } = {
   slope: [3, 0.08, 1],
   barrier: [2, 0.5, 0.08],
   force_meter: [0.12, 0.8, 0.12],
+  force_field: [1.5, 1.5, 1.5],
 }
 
 function generateId(): string {
@@ -276,6 +318,8 @@ const DEFAULT_EDITOR_CONFIG: SandboxEditorConfig = {
   showTrajectory: false,
   showVelocityVector: false,
   showAccelerationVector: false,
+  showForceVectors: false,
+  showEnergyBar: false,
 }
 
 function getEquipmentDefaults(shape: SandboxShape): Partial<SandboxItem> {
@@ -386,6 +430,14 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     currentStepIndex: 0,
     completedTaskIds: [],
     records: [],
+  },
+  recording: {
+    isRecording: false,
+    isPlaying: false,
+    frames: [],
+    currentFrameIndex: 0,
+    playbackSpeed: 1,
+    fps: 30,
   },
 
   addItem: (shape, position) =>
@@ -873,6 +925,78 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   clearTaskRecords: () =>
     set((state) => ({
       task: { ...state.task, records: [] },
+    })),
+
+  startRecording: (fps = 30) =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        isRecording: true,
+        isPlaying: false,
+        frames: [],
+        currentFrameIndex: 0,
+        fps,
+      },
+    })),
+
+  stopRecording: () =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        isRecording: false,
+      },
+    })),
+
+  pushRecordedFrame: (frame) =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        frames: [...state.recording.frames, frame],
+      },
+    })),
+
+  clearRecording: () =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        isRecording: false,
+        isPlaying: false,
+        frames: [],
+        currentFrameIndex: 0,
+      },
+    })),
+
+  setPlaybackFrame: (index) =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        currentFrameIndex: Math.max(0, Math.min(index, state.recording.frames.length - 1)),
+      },
+    })),
+
+  setPlaybackSpeed: (speed) =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        playbackSpeed: speed,
+      },
+    })),
+
+  startPlayback: () =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        isPlaying: true,
+        currentFrameIndex: 0,
+      },
+    })),
+
+  stopPlayback: () =>
+    set((state) => ({
+      recording: {
+        ...state.recording,
+        isPlaying: false,
+      },
     })),
 }))
 
