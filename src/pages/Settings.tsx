@@ -118,19 +118,6 @@ export function Settings() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-accent" />
-              {t('ai.settings.title')}
-            </CardTitle>
-            <CardDescription>{t('ai.settings.subtitle')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AiSettingsPanel />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
               <SlidersHorizontal className="h-5 w-5 text-accent" />
               {t('settings.physics')}
             </CardTitle>
@@ -202,6 +189,19 @@ export function Settings() {
                 {t('settings.resetDefaults')}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-accent" />
+              {t('ai.settings.title')}
+            </CardTitle>
+            <CardDescription>{t('ai.settings.subtitle')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AiSettingsPanel />
           </CardContent>
         </Card>
 
