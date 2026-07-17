@@ -75,7 +75,7 @@ export function DataPanel() {
   const clearTelemetry = useSandboxStore((s) => s.clearTelemetry)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
 
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
 
   const trackedId = telemetry.trackedId ?? selectedId
   const trackedItem = useMemo(

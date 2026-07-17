@@ -86,6 +86,7 @@ import {
   Eye,
   BarChart3,
   Cloud,
+  Menu,
 } from 'lucide-react'
 
 const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
@@ -281,8 +282,11 @@ export function Sandbox() {
   const [cameraFocusKey, setCameraFocusKey] = useState(0)
   const [showPresetMenu, setShowPresetMenu] = useState(false)
   const [leftTab, setLeftTab] = useState<'equipment' | 'tasks' | 'recipes'>('equipment')
+  const [rightTab, setRightTab] = useState<'hierarchy' | 'properties' | 'ai'>('properties')
   const [cloudOpen, setCloudOpen] = useState(false)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
+  const [sceneMenuOpen, setSceneMenuOpen] = useState(false)
+  const sceneMenuRef = useRef<HTMLDivElement>(null)
   const [recipeState, setRecipeState] = useState<{
     activeRecipeId: string | null
     currentStepIndex: number
@@ -361,6 +365,17 @@ export function Sandbox() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showPresetMenu])
+
+  useEffect(() => {
+    if (!sceneMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (sceneMenuRef.current && !sceneMenuRef.current.contains(e.target as Node)) {
+        setSceneMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [sceneMenuOpen])
 
   useSandboxShortcuts({
     onRunToggle: () => setRunning(!isRunning),
@@ -575,15 +590,9 @@ export function Sandbox() {
     return isMobile ? 'flex flex-col py-2' : 'flex flex-col py-4'
   }, [isFullscreen, isMobile])
 
-  const canvasHeight = isFullscreen
-    ? 'flex-1'
-    : isMobile
-      ? 'h-[calc(100vh-130px)] min-h-[300px]'
-      : 'h-[calc(100vh-180px)] min-h-[400px]'
-
   return (
     <div className={containerClass}>
-      {/* Compact toolbar */}
+      {/* Toolbar */}
       <div
         className={cn(
           'mb-2 flex items-center gap-2',
@@ -591,6 +600,7 @@ export function Sandbox() {
           isFullscreen && 'px-1 pt-1'
         )}
       >
+        {/* Title + Playback */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {!isFullscreen && !isMobile && (
             <h1 className="font-heading text-xl text-text-primary">{t('nav.sandbox')}</h1>
@@ -618,20 +628,20 @@ export function Sandbox() {
         </div>
 
         <div className="flex items-center gap-1">
+          <ToolButton
+            icon={SkipForward}
+            onClick={requestStep}
+            title={t('sandbox.step')}
+            disabled={isRunning}
+            size="sm"
+          />
           <ToolButton icon={Undo2} onClick={undo} title={t('sandbox.undo')} size="sm" />
           <ToolButton icon={Redo2} onClick={redo} title={t('sandbox.redo')} size="sm" />
         </div>
 
-        <ToolButton
-          icon={SkipForward}
-          onClick={requestStep}
-          title={t('sandbox.step')}
-          disabled={isRunning}
-          size="sm"
-        />
-
         <Divider />
 
+        {/* Edit / simulation controls */}
         {!isRunning && selectedId && (
           <div className="flex items-center gap-1">
             <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
@@ -723,6 +733,9 @@ export function Sandbox() {
           active={editorConfig.snapEnabled}
         />
 
+        <Divider />
+
+        {/* View controls */}
         <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
           <Camera className="ml-1.5 mr-0.5 h-3.5 w-3.5 text-text-tertiary" />
           {CAMERA_VIEWS.map((view) => (
@@ -742,6 +755,21 @@ export function Sandbox() {
           ))}
         </div>
 
+        <ToolButton
+          icon={Camera}
+          onClick={() => setCameraResetKey((k) => k + 1)}
+          title={t('sandbox.cameraReset')}
+        />
+        <ToolButton
+          icon={Crosshair}
+          onClick={() => setCameraFocusKey((k) => k + 1)}
+          title={t('sandbox.focusSelected')}
+          disabled={!selectedId}
+        />
+
+        <Divider />
+
+        {/* Time scale */}
         <div className="flex items-center gap-1.5 rounded-lg border border-border bg-paper px-2 py-1">
           <span className="text-xs text-text-secondary">{t('sandbox.timeScale')}</span>
           <input
@@ -758,93 +786,150 @@ export function Sandbox() {
           </span>
         </div>
 
-        <Divider />
-
-        {/* Joint creation */}
-        <div className="relative" ref={jointMenuRef}>
-          <ToolButton
-            icon={Link2}
-            onClick={() => canCreateJoint && setShowJointMenu((s) => !s)}
-            title={canCreateJoint ? t('sandbox.createJoint') : t('sandbox.createJointHint')}
-            disabled={!canCreateJoint}
-          />
-          {showJointMenu && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-32 rounded-lg border border-border bg-paper py-1 shadow-lg">
-              {JOINT_TYPES.map(({ type, labelKey }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleCreateJoint(type)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
-                >
-                  <Link2 className="h-3 w-3" />
-                  {t(labelKey)}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <ToolButton
-          icon={Copy}
-          onClick={() => selectedId && duplicateItem(selectedId)}
-          title={t('sandbox.duplicate')}
-          disabled={!selectedId}
-        />
-        <ToolButton
-          icon={ClipboardCopy}
-          onClick={() => selectedId && copyItem(selectedId)}
-          title={t('sandbox.copy')}
-          disabled={!selectedId}
-        />
-        <ToolButton
-          icon={ClipboardPaste}
-          onClick={() => pasteItem()}
-          title={t('sandbox.paste')}
-          disabled={!clipboard || clipboard.length === 0}
-        />
-        <ToolButton
-          icon={Trash2}
-          onClick={() => selectedId && removeItem(selectedId)}
-          title={t('sandbox.delete')}
-          disabled={!selectedId}
-        />
-        <ToolButton
-          icon={Eraser}
-          onClick={handleClear}
-          title={t('sandbox.clear')}
-          disabled={items.length === 0}
-        />
-        <ToolButton icon={RotateCcw} onClick={resetScene} title={t('sandbox.reset')} />
-        <ToolButton
-          icon={Camera}
-          onClick={() => setCameraResetKey((k) => k + 1)}
-          title={t('sandbox.cameraReset')}
-        />
-        <ToolButton
-          icon={Crosshair}
-          onClick={() => setCameraFocusKey((k) => k + 1)}
-          title={t('sandbox.focusSelected')}
-          disabled={!selectedId}
-        />
-        <ToolButton icon={Download} onClick={handleExport} title={t('sandbox.export')} />
-        <ToolButton icon={Upload} onClick={handleImportClick} title={t('sandbox.import')} />
-        <ToolButton
-          icon={Cloud}
-          onClick={() => setCloudOpen((open) => !open)}
-          title={t('cloud.title')}
-          active={cloudOpen}
-        />
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-
         <div className="ml-auto flex items-center gap-1">
+          {/* Edit clipboard */}
+          <div className="flex items-center gap-1">
+            <ToolButton
+              icon={Copy}
+              onClick={() => selectedId && duplicateItem(selectedId)}
+              title={t('sandbox.duplicate')}
+              disabled={!selectedId}
+            />
+            <ToolButton
+              icon={ClipboardCopy}
+              onClick={() => selectedId && copyItem(selectedId)}
+              title={t('sandbox.copy')}
+              disabled={!selectedId}
+            />
+            <ToolButton
+              icon={ClipboardPaste}
+              onClick={() => pasteItem()}
+              title={t('sandbox.paste')}
+              disabled={!clipboard || clipboard.length === 0}
+            />
+            <ToolButton
+              icon={Trash2}
+              onClick={() => selectedId && removeItem(selectedId)}
+              title={t('sandbox.delete')}
+              disabled={!selectedId}
+            />
+          </div>
+
+          <Divider />
+
+          {/* Joint creation */}
+          <div className="relative" ref={jointMenuRef}>
+            <ToolButton
+              icon={Link2}
+              onClick={() => canCreateJoint && setShowJointMenu((s) => !s)}
+              title={canCreateJoint ? t('sandbox.createJoint') : t('sandbox.createJointHint')}
+              disabled={!canCreateJoint}
+            />
+            {showJointMenu && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-lg border border-border bg-paper py-1 shadow-lg">
+                {JOINT_TYPES.map(({ type, labelKey }) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleCreateJoint(type)}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
+                  >
+                    <Link2 className="h-3 w-3" />
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Divider />
+
+          {/* Scene menu */}
+          <div className="relative" ref={sceneMenuRef}>
+            <ToolButton
+              icon={Menu}
+              onClick={() => setSceneMenuOpen((s) => !s)}
+              title={t('sandbox.sceneMenu')}
+              active={sceneMenuOpen}
+            />
+            {sceneMenuOpen && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-paper py-1 shadow-lg">
+                <SceneMenuItem
+                  icon={Upload}
+                  label={t('sandbox.import')}
+                  onClick={() => {
+                    handleImportClick()
+                    setSceneMenuOpen(false)
+                  }}
+                />
+                <SceneMenuItem
+                  icon={Download}
+                  label={t('sandbox.export')}
+                  onClick={() => {
+                    handleExport()
+                    setSceneMenuOpen(false)
+                  }}
+                />
+                <SceneMenuItem
+                  icon={Cloud}
+                  label={t('cloud.title')}
+                  active={cloudOpen}
+                  onClick={() => {
+                    setCloudOpen((open) => !open)
+                    setSceneMenuOpen(false)
+                  }}
+                />
+                <div className="my-1 h-px bg-border" />
+                <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
+                  {t('sandbox.presets')}
+                </div>
+                {SANDBOX_PRESETS.map(({ id, label, scene }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(t('sandbox.presetConfirm', { name: label }))) {
+                        loadScene(scene)
+                      }
+                      setSceneMenuOpen(false)
+                    }}
+                    className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
+                  >
+                    {label}
+                  </button>
+                ))}
+                <div className="my-1 h-px bg-border" />
+                <SceneMenuItem
+                  icon={Eraser}
+                  label={t('sandbox.clear')}
+                  disabled={items.length === 0}
+                  onClick={() => {
+                    handleClear()
+                    setSceneMenuOpen(false)
+                  }}
+                />
+                <SceneMenuItem
+                  icon={RotateCcw}
+                  label={t('sandbox.reset')}
+                  onClick={() => {
+                    resetScene()
+                    setSceneMenuOpen(false)
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          <Divider />
+
           {isMobile && (
             <>
               <ToolButton
@@ -867,6 +952,7 @@ export function Sandbox() {
               />
             </>
           )}
+
           <ToolButton
             icon={HelpCircle}
             onClick={() => setUI({ isHelpOpen: !ui.isHelpOpen })}
@@ -917,10 +1003,10 @@ export function Sandbox() {
         </div>
       )}
 
-      <div className={cn('flex flex-col gap-2', canvasHeight)}>
-        <div className="flex flex-1 gap-2 min-h-0">
+      <div className="flex flex-1 min-h-0 flex-col gap-2">
+        <div className="flex flex-1 min-h-0 gap-2">
           {leftOpen && !isFullscreen && (
-            <div className="flex w-52 flex-shrink-0 flex-col gap-2">
+            <div className="flex w-56 flex-shrink-0 flex-col gap-2">
               <div className="flex rounded-lg border border-border bg-paper p-0.5">
                 {(
                   [
@@ -1135,13 +1221,36 @@ export function Sandbox() {
           </div>
 
           {rightOpen && !isFullscreen && (
-            <div className="flex w-64 flex-shrink-0 flex-col gap-2">
-              <SceneHierarchyPanel />
-              <div className="min-h-0 flex-1">
-                <PropertiesPanel />
+            <div className="flex w-72 flex-shrink-0 flex-col gap-2">
+              <div className="flex rounded-lg border border-border bg-paper p-0.5">
+                {(
+                  [
+                    ['hierarchy', 'sandbox.hierarchy'],
+                    ['properties', 'sandbox.properties'],
+                    ['ai', 'ai.agent.title'],
+                  ] as const
+                ).map(([tab, labelKey]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setRightTab(tab)}
+                    className={cn(
+                      'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                      rightTab === tab
+                        ? 'bg-accent-soft text-accent'
+                        : 'text-text-secondary hover:text-text-primary'
+                    )}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
               </div>
-              <div className="max-h-[320px] min-h-0 flex-shrink-0">
-                <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {rightTab === 'hierarchy' && <SceneHierarchyPanel />}
+                {rightTab === 'properties' && <PropertiesPanel />}
+                {rightTab === 'ai' && (
+                  <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
+                )}
               </div>
             </div>
           )}
@@ -1149,7 +1258,7 @@ export function Sandbox() {
 
         {!isFullscreen && !isMobile && <DataPanel />}
         {!isFullscreen && cloudOpen && (
-          <div className="max-w-full">
+          <div className="max-h-[260px] max-w-full overflow-hidden">
             <CloudSyncPanel
               currentScene={{ items, gravity, joints }}
               onLoadScene={(data) => {
@@ -1293,4 +1402,36 @@ function ToolButton({
 
 function Divider() {
   return <div className="h-5 w-px bg-border" />
+}
+
+function SceneMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  active,
+  disabled,
+}: {
+  icon: typeof Undo2
+  label: string
+  onClick: () => void
+  active?: boolean
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors',
+        active
+          ? 'bg-accent-soft text-accent'
+          : 'text-text-primary hover:bg-accent-soft hover:text-accent',
+        disabled && 'cursor-not-allowed opacity-40'
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  )
 }
