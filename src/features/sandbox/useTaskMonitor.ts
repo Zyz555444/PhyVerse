@@ -32,9 +32,10 @@ export function useTaskMonitor() {
 
     const result = evaluateObjective(step.objective, getSample, task.records.length)
     if (result.passed) {
-      advanceTaskStep()
       if (task.currentStepIndex >= activeTask.steps.length - 1) {
         completeTask(activeTask.id)
+      } else {
+        advanceTaskStep()
       }
     }
   }, [
