@@ -30,6 +30,7 @@ interface RecipePanelProps {
   currentStepIndex: number
   completedRecipeIds: string[]
   onAdvanceStep: () => void
+  onPrevStep: () => void
   onResetStep: () => void
 }
 
@@ -40,6 +41,7 @@ export function RecipePanel({
   currentStepIndex,
   completedRecipeIds,
   onAdvanceStep,
+  onPrevStep,
   onResetStep,
 }: RecipePanelProps) {
   const { t } = useI18n()
@@ -118,6 +120,18 @@ export function RecipePanel({
               style={{ width: `${progress}%` }}
             />
           </div>
+          {/* Step dots */}
+          <div className="flex justify-center gap-1">
+            {activeRecipe.steps.map((_, idx) => (
+              <div
+                key={idx}
+                className={cn(
+                  'h-1.5 rounded-full transition-all duration-300',
+                  idx <= currentStepIndex ? 'w-4 bg-accent' : 'w-1.5 bg-border'
+                )}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Current step */}
@@ -167,7 +181,7 @@ export function RecipePanel({
           </Button>
           <div className="flex gap-2">
             {currentStepIndex > 0 && (
-              <Button variant="ghost" size="sm" onClick={onResetStep}>
+              <Button variant="ghost" size="sm" onClick={onPrevStep}>
                 {t('recipe.prev')}
               </Button>
             )}
@@ -187,6 +201,9 @@ export function RecipePanel({
       <div className="flex items-center gap-2">
         <BookOpen className="h-4 w-4 text-accent" />
         <span className="text-sm font-semibold text-text-primary">{t('recipe.library')}</span>
+        <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[9px] font-medium text-accent">
+          {RECIPE_LIBRARY.length}
+        </span>
       </div>
 
       {/* Search */}
@@ -245,9 +262,18 @@ export function RecipePanel({
 
       {/* Recipe list */}
       {filteredRecipes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-8 text-text-tertiary">
+        <div className="flex flex-col items-center justify-center gap-3 py-8 text-text-tertiary">
           <Search className="h-8 w-8 opacity-30" />
           <p className="text-xs">{t('recipe.noResults')}</p>
+          {categoryFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className="rounded-full bg-accent-soft px-3 py-1 text-[10px] font-medium text-accent hover:bg-accent-soft/80"
+            >
+              {t('recipe.clearFilter')}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">

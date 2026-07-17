@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Gauge, Ruler, Thermometer, ChevronDown, ChevronUp } from 'lucide-react'
+import { Gauge, Ruler, ChevronDown, ChevronUp } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
 import { usePhysics } from '@/features/physics/usePhysics'
@@ -41,8 +41,14 @@ export function MeasurementToolbar() {
     return getFriendlyName(items, selectedId)
   }, [items, selectedId])
 
-  // Update readings from physics
-  useFrame(() => {
+  const throttleRef = useRef(0)
+
+  // Update readings from physics (throttled to ~10fps)
+  useFrame((_, delta) => {
+    throttleRef.current += delta
+    if (throttleRef.current < 0.1) return
+    throttleRef.current = 0
+
     if (!selectedId || !world?.isReady) return
     const record = world.getBody(selectedId)
     if (!record) return
@@ -211,7 +217,7 @@ export function MeasurementToolbar() {
             </div>
 
             {distanceTargets && (
-              <div className="rounded bg-background px-2 py-1.5 text-center">
+              <div className="rounded bg-background px-2 py-1.5 text-center animate-in fade-in">
                 <span className="font-mono text-sm font-bold text-accent">
                   {distance.toFixed(2)} m
                 </span>
@@ -224,32 +230,6 @@ export function MeasurementToolbar() {
 
             {!distanceTargets && dynamicItems.length >= 2 && (
               <p className="text-[9px] text-text-tertiary">{t('measurement.distanceHint')}</p>
-            )}
-          </div>
-
-          {/* Temperature indicator */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-medium text-text-tertiary">
-              <Thermometer className="h-3 w-3" />
-              {t('measurement.temperature')}
-            </div>
-            {selectedItem ? (
-              <div className="flex items-center gap-2">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-border">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(selectedItem.restitution * 100, 100)}%`,
-                      background: `linear-gradient(to right, #3b82f6, #f97316, #dc2626)`,
-                    }}
-                  />
-                </div>
-                <span className="text-[10px] font-mono text-text-secondary">
-                  {(selectedItem.restitution * 100).toFixed(0)}°C
-                </span>
-              </div>
-            ) : (
-              <p className="text-[9px] text-text-tertiary italic">{t('measurement.tempHint')}</p>
             )}
           </div>
         </div>

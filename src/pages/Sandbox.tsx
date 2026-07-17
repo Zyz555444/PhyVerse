@@ -492,6 +492,13 @@ export function Sandbox() {
     }))
   }
 
+  const handlePrevRecipeStep = () => {
+    setRecipeState((prev) => ({
+      ...prev,
+      currentStepIndex: Math.max(0, prev.currentStepIndex - 1),
+    }))
+  }
+
   const handleAddRecord = () => {
     if (!telemetry.live) return
     addTaskRecord({
@@ -561,7 +568,11 @@ export function Sandbox() {
     return isMobile ? 'flex flex-col py-2' : 'flex flex-col py-4'
   }, [isFullscreen, isMobile])
 
-  const canvasHeight = isFullscreen ? 'flex-1' : 'h-[calc(100vh-180px)] min-h-[400px]'
+  const canvasHeight = isFullscreen
+    ? 'flex-1'
+    : isMobile
+      ? 'h-[calc(100vh-130px)] min-h-[300px]'
+      : 'h-[calc(100vh-180px)] min-h-[400px]'
 
   return (
     <div className={containerClass}>
@@ -872,7 +883,7 @@ export function Sandbox() {
       </div>
 
       {/* Status bar */}
-      {!isFullscreen && (
+      {!isFullscreen && !isMobile && (
         <div className="mb-2 flex items-center gap-3 px-1 text-xs text-text-tertiary">
           <span className="flex items-center gap-1">
             <BoxIcon className="h-3 w-3" />
@@ -931,6 +942,7 @@ export function Sandbox() {
                     currentStepIndex={recipeState.currentStepIndex}
                     completedRecipeIds={recipeState.completedRecipeIds}
                     onAdvanceStep={handleAdvanceRecipeStep}
+                    onPrevStep={handlePrevRecipeStep}
                     onResetStep={handleResetRecipeStep}
                   />
                 ) : (
@@ -1023,16 +1035,16 @@ export function Sandbox() {
               </PhysicsProvider>
             </Scene>
 
-            {saved && (
+            {saved && !isMobile && (
               <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-paper/95 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm">
                 <Check className="h-3.5 w-3.5 text-green-500" />
                 {t('sandbox.saved')}
               </div>
             )}
 
-            <RecorderControls />
+            {!isMobile && <RecorderControls />}
 
-            {!isRunning && !isPlaying && (
+            {!isRunning && !isPlaying && !isMobile && (
               <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
                 {t('sandbox.pausedMode')}
               </div>
@@ -1118,7 +1130,7 @@ export function Sandbox() {
           )}
         </div>
 
-        {!isFullscreen && <DataPanel />}
+        {!isFullscreen && !isMobile && <DataPanel />}
         {!isFullscreen && (
           <div className="max-w-full">
             <MeasurementToolbar />
@@ -1154,7 +1166,7 @@ export function Sandbox() {
               type="button"
               onClick={() => setLeftTab(tab)}
               className={cn(
-                'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
                 leftTab === tab
                   ? 'bg-accent-soft text-accent'
                   : 'text-text-secondary hover:text-text-primary'
@@ -1174,6 +1186,7 @@ export function Sandbox() {
             currentStepIndex={recipeState.currentStepIndex}
             completedRecipeIds={recipeState.completedRecipeIds}
             onAdvanceStep={handleAdvanceRecipeStep}
+            onPrevStep={handlePrevRecipeStep}
             onResetStep={handleResetRecipeStep}
           />
         ) : (

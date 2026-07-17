@@ -41,12 +41,18 @@ function SpeedLabel({ isRunning, isMobile }: { isRunning: boolean; isMobile: boo
 
   const [x, y, z] = speedItem.position
   const labelY = y + (speedItem.size?.[0] ?? 0.5) + 0.5
+  const isSlow = speed < 0.1
 
   return (
     <group>
       <mesh position={[x, labelY, z]}>
         <ringGeometry args={[0.15, 0.2, 32]} />
-        <meshBasicMaterial color={color} side={THREE.DoubleSide} />
+        <meshBasicMaterial
+          color={color}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={isSlow ? 0.2 : 0.9}
+        />
       </mesh>
       <Text
         position={[x, labelY, z]}
@@ -56,6 +62,7 @@ function SpeedLabel({ isRunning, isMobile }: { isRunning: boolean; isMobile: boo
         anchorY="middle"
         outlineWidth={0.02}
         outlineColor="#000000"
+        fillOpacity={isSlow ? 0.3 : 1}
       >
         {`${speed.toFixed(1)} m/s`}
       </Text>
@@ -90,6 +97,9 @@ function DistanceLine() {
   })
 
   if (!showDistance) return null
+
+  // Skip when objects are nearly overlapping
+  if (distance < 0.2) return null
 
   const [ax, ay, az] = measurableItems[0].position
   const [bx, by, bz] = measurableItems[1].position
