@@ -406,6 +406,22 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.waves.step3.title': '改变参数',
     'recipe.waves.step3.desc': '尝试修改小球质量或弹簧刚度（属性面板中），观察周期和频率的变化。',
     'recipe.waves.step3.hint': '质量越大周期越长，刚度越大周期越短',
+
+    // Measurement tools
+    'measurement.title': '测量工具',
+    'measurement.selectedObject': '测量对象',
+    'measurement.speed': '速度',
+    'measurement.kineticEnergy': '动能',
+    'measurement.potentialEnergy': '势能',
+    'measurement.totalEnergy': '总能量',
+    'measurement.height': '高度',
+    'measurement.distance': '距离测量',
+    'measurement.measure': '测量',
+    'measurement.clear': '清除',
+    'measurement.distanceHint': '点击测量计算两个动态物体之间的距离',
+    'measurement.selectHint': '选择一个动态物体以查看测量数据',
+    'measurement.temperature': '温度指示',
+    'measurement.tempHint': '选择一个物体以查看温度指示',
   },
   en: {
     'app.name': 'PhyVerse',
@@ -812,6 +828,22 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.waves.step3.title': 'Change Parameters',
     'recipe.waves.step3.desc': 'Try modifying the ball mass or spring stiffness (in the properties panel) and observe changes in period and frequency.',
     'recipe.waves.step3.hint': 'Larger mass → longer period, larger stiffness → shorter period',
+
+    // Measurement tools
+    'measurement.title': 'Measurement',
+    'measurement.selectedObject': 'Selected Object',
+    'measurement.speed': 'Speed',
+    'measurement.kineticEnergy': 'Kinetic Energy',
+    'measurement.potentialEnergy': 'Potential Energy',
+    'measurement.totalEnergy': 'Total Energy',
+    'measurement.height': 'Height',
+    'measurement.distance': 'Distance',
+    'measurement.measure': 'Measure',
+    'measurement.clear': 'Clear',
+    'measurement.distanceHint': 'Click measure to calculate distance between two dynamic objects',
+    'measurement.selectHint': 'Select a dynamic object to view measurements',
+    'measurement.temperature': 'Temperature',
+    'measurement.tempHint': 'Select an object to view temperature indicator',
   },
 }
 

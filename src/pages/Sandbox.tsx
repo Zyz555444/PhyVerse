@@ -45,6 +45,8 @@ import { ForceFieldRenderer } from '@/features/sandbox/ForceFieldRenderer'
 import { AITutorPanel } from '@/ai/AITutorPanel'
 import { RecipePanel } from '@/features/recipe/RecipePanel'
 import { type Recipe } from '@/features/recipe/recipeTypes'
+import { MeasurementOverlay } from '@/features/measurement/MeasurementOverlay'
+import { MeasurementToolbar } from '@/features/measurement/MeasurementToolbar'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/utils/cn'
@@ -969,6 +971,7 @@ export function Sandbox() {
                 <ForceVisualizer isRunning={isRunning} />
                 <EnergyBar isRunning={isRunning} />
                 <ForceFieldRenderer isRunning={isRunning} />
+                <MeasurementOverlay isRunning={isRunning} />
                 <BoxSelection />
                 <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
                 <SandboxJoints />
@@ -1116,6 +1119,11 @@ export function Sandbox() {
         </div>
 
         {!isFullscreen && <DataPanel />}
+        {!isFullscreen && (
+          <div className="max-w-full">
+            <MeasurementToolbar />
+          </div>
+        )}
       </div>
 
       <AITutorPanel />
