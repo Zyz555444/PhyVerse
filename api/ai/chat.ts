@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { sql, ensureTables } from '../_lib/db'
-import { getAuthUser } from '../_lib/auth'
-import { handleCors } from '../_lib/cors'
-import { aesDecrypt } from '../_lib/crypto'
+import { sql, ensureTables } from '../_lib/db.js'
+import { getAuthUser } from '../_lib/auth.js'
+import { handleCors } from '../_lib/cors.js'
+import { aesDecrypt } from '../_lib/crypto.js'
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
