@@ -1,5 +1,5 @@
-import { type ReactNode, useState, useRef, useEffect } from 'react'
-import { ChevronUp, X } from 'lucide-react'
+import { type ReactNode, useState, useRef } from 'react'
+import { X } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
 
 interface MobileBottomSheetProps {
@@ -11,14 +11,21 @@ interface MobileBottomSheetProps {
   maxHeight?: number
 }
 
-export function MobileBottomSheet({ open, onClose, title, children, maxHeight = 60 }: MobileBottomSheetProps) {
+export function MobileBottomSheet({
+  open,
+  onClose,
+  title,
+  children,
+  maxHeight = 60,
+}: MobileBottomSheetProps) {
   const [dragY, setDragY] = useState(0)
   const startYRef = useRef(0)
   const sheetRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) setDragY(0)
-  }, [open])
+  const handleClose = () => {
+    setDragY(0)
+    onClose()
+  }
 
   const handleTouchStart = (e: React.TouchEvent) => {
     startYRef.current = e.touches[0].clientY
@@ -33,9 +40,10 @@ export function MobileBottomSheet({ open, onClose, title, children, maxHeight = 
 
   const handleTouchEnd = () => {
     if (dragY > 100) {
-      onClose()
+      handleClose()
+    } else {
+      setDragY(0)
     }
-    setDragY(0)
   }
 
   if (!open) return null
@@ -45,7 +53,7 @@ export function MobileBottomSheet({ open, onClose, title, children, maxHeight = 
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={handleClose}
         aria-hidden
       />
 
@@ -74,7 +82,7 @@ export function MobileBottomSheet({ open, onClose, title, children, maxHeight = 
           <span className="text-sm font-medium text-text-primary">{title}</span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-lg p-1 text-text-tertiary hover:text-text-primary"
           >
             <X className="h-4 w-4" />
@@ -82,7 +90,10 @@ export function MobileBottomSheet({ open, onClose, title, children, maxHeight = 
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto px-4 pb-6" style={{ maxHeight: `calc(${maxHeight}vh - 60px)` }}>
+        <div
+          className="overflow-y-auto px-4 pb-6"
+          style={{ maxHeight: `calc(${maxHeight}vh - 60px)` }}
+        >
           {children}
         </div>
       </div>
