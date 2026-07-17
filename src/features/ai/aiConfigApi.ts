@@ -30,15 +30,11 @@ export async function fetchAiConfig(): Promise<{ config: AiConfig | null }> {
   return request<{ config: AiConfig | null }>('/ai-config')
 }
 
-export async function fetchAiPublicKey(): Promise<{ publicKey: string }> {
-  return request<{ publicKey: string }>('/ai-config?publicKey=true')
-}
-
 export async function saveAiConfig(payload: {
   provider: string
   endpoint: string
   model: string
-  encryptedApiKey: string
+  apiKey: string
 }): Promise<{ config: AiConfig }> {
   return request<{ config: AiConfig }>('/ai-config', {
     method: 'POST',

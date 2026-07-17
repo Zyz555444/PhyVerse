@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { sql, ensureTables } from '../_lib/db.js'
 import { getAuthUser } from '../_lib/auth.js'
 import { handleCors } from '../_lib/cors.js'
-import { getPublicKey, rsaDecrypt, aesEncrypt } from '../_lib/crypto.js'
+import { aesEncrypt } from '../_lib/crypto.js'
 
 export interface AiConfigDto {
   id: string
@@ -25,12 +25,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   await ensureTables()
 
   if (req.method === 'GET') {
-    // Return public key for client-side RSA encryption
-    if (req.query.publicKey === 'true') {
-      res.status(200).json({ publicKey: getPublicKey() })
-      return
-    }
-
     try {
       const result = await sql`
         SELECT id, provider, endpoint, model, created_at, updated_at
@@ -60,21 +54,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   if (req.method === 'POST') {
-    const { provider, endpoint, model, encryptedApiKey } = req.body as {
+    const { provider, endpoint, model, apiKey } = req.body as {
       provider?: string
       endpoint?: string
       model?: string
-      encryptedApiKey?: string
+      apiKey?: string
     }
 
-    if (!provider || !endpoint || !model || !encryptedApiKey) {
-      res.status(400).json({ error: 'provider, endpoint, model and encryptedApiKey are required' })
+    if (!provider || !endpoint || !model || !apiKey) {
+      res.status(400).json({ error: 'provider, endpoint, model and apiKey are required' })
       return
     }
 
     try {
-      const plainApiKey = rsaDecrypt(encryptedApiKey)
-      const bundle = aesEncrypt(plainApiKey)
+      const bundle = await aesEncrypt(apiKey)
 
       const existing = await sql`
         SELECT id FROM ai_configs WHERE user_id = ${authUser.userId}

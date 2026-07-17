@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const config = configResult[0]
-    const apiKey = aesDecrypt({
+    const apiKey = await aesDecrypt({
       encrypted: config.api_key_encrypted,
       iv: config.api_key_iv,
       tag: config.api_key_tag,

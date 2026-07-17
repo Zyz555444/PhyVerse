@@ -50,4 +50,11 @@ export async function ensureTables(): Promise<void> {
         UNIQUE(user_id)
       );
     `
+  await sql`
+      CREATE TABLE IF NOT EXISTS app_secrets (
+        key_name TEXT PRIMARY KEY,
+        key_value TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `
 }

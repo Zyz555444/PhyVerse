@@ -1,40 +1,40 @@
 import crypto from 'crypto'
+import { sql } from './db.js'
 
-let _publicKey: string | null = null
-let _privateKey: string | null = null
 let _aesKey: Buffer | null = null
 
-function ensureKeys(): void {
-  if (_publicKey && _privateKey && _aesKey) return
+/**
+ * Returns the AES-256 key used for encrypting API keys at rest.
+ * Uses env var first, then falls back to the database, then generates and persists.
+ */
+export async function getOrCreateAesKey(): Promise<Buffer> {
+  if (_aesKey) return _aesKey
 
-  const rsaPrivateBase64 = process.env.RSA_PRIVATE_KEY_BASE64
-  const rsaPublicBase64 = process.env.RSA_PUBLIC_KEY_BASE64
-  const aesKeyBase64 = process.env.AI_KEY_ENCRYPTION_KEY_BASE64
-
-  if (rsaPrivateBase64 && rsaPublicBase64) {
-    _privateKey = Buffer.from(rsaPrivateBase64, 'base64').toString('utf-8')
-    _publicKey = Buffer.from(rsaPublicBase64, 'base64').toString('utf-8')
-  } else {
-    // Generate RSA key pair on-the-fly when env vars are not set
-    console.warn('[crypto] RSA keys not set in env, generating ephemeral key pair')
-    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    })
-    _privateKey = privateKey
-    _publicKey = publicKey
-  }
-
-  if (aesKeyBase64) {
-    _aesKey = Buffer.from(aesKeyBase64, 'base64')
+  const envKey = process.env.AI_KEY_ENCRYPTION_KEY_BASE64
+  if (envKey) {
+    _aesKey = Buffer.from(envKey, 'base64')
     if (_aesKey.length !== 32) {
       throw new Error('AI_KEY_ENCRYPTION_KEY_BASE64 must decode to 32 bytes')
     }
-  } else {
-    console.warn('[crypto] AES key not set in env, generating ephemeral key')
-    _aesKey = crypto.randomBytes(32)
+    return _aesKey
   }
+
+  // Try to read from database
+  const rows = await sql`SELECT key_value FROM app_secrets WHERE key_name = 'aes_key'`
+  if (rows.length > 0) {
+    _aesKey = Buffer.from(rows[0].key_value, 'base64')
+    return _aesKey
+  }
+
+  // Generate and persist
+  _aesKey = crypto.randomBytes(32)
+  const keyB64 = _aesKey.toString('base64')
+  await sql`
+    INSERT INTO app_secrets (key_name, key_value)
+    VALUES ('aes_key', ${keyB64})
+    ON CONFLICT (key_name) DO NOTHING
+  `
+  return _aesKey
 }
 
 export interface EncryptedKeyBundle {
@@ -43,29 +43,10 @@ export interface EncryptedKeyBundle {
   tag: string
 }
 
-export function getPublicKey(): string {
-  ensureKeys()
-  return _publicKey!
-}
-
-export function rsaDecrypt(base64CipherText: string): string {
-  ensureKeys()
-  const buffer = Buffer.from(base64CipherText, 'base64')
-  const decrypted = crypto.privateDecrypt(
-    {
-      key: _privateKey!,
-      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: 'sha256',
-    },
-    buffer
-  )
-  return decrypted.toString('utf-8')
-}
-
-export function aesEncrypt(plainText: string): EncryptedKeyBundle {
-  ensureKeys()
+export async function aesEncrypt(plainText: string): Promise<EncryptedKeyBundle> {
+  const key = await getOrCreateAesKey()
   const iv = crypto.randomBytes(16)
-  const cipher = crypto.createCipheriv('aes-256-gcm', _aesKey!, iv)
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
   const encrypted = Buffer.concat([cipher.update(plainText, 'utf-8'), cipher.final()])
   const tag = cipher.getAuthTag()
   return {
@@ -75,13 +56,9 @@ export function aesEncrypt(plainText: string): EncryptedKeyBundle {
   }
 }
 
-export function aesDecrypt(bundle: EncryptedKeyBundle): string {
-  ensureKeys()
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    _aesKey!,
-    Buffer.from(bundle.iv, 'base64')
-  )
+export async function aesDecrypt(bundle: EncryptedKeyBundle): Promise<string> {
+  const key = await getOrCreateAesKey()
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(bundle.iv, 'base64'))
   decipher.setAuthTag(Buffer.from(bundle.tag, 'base64'))
   const decrypted = Buffer.concat([
     decipher.update(Buffer.from(bundle.encrypted, 'base64')),

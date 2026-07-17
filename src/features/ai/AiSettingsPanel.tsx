@@ -17,15 +17,8 @@ import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
 import { Input } from '@/shared/ui/Input'
 import { cn } from '@/shared/utils/cn'
-import {
-  fetchAiConfig,
-  fetchAiPublicKey,
-  saveAiConfig,
-  deleteAiConfig,
-  sendAiChat,
-} from './aiConfigApi'
+import { fetchAiConfig, saveAiConfig, deleteAiConfig, sendAiChat } from './aiConfigApi'
 import { AI_PROVIDERS } from './aiConfigTypes'
-import { rsaEncrypt } from './rsaCrypto'
 import type { AiConfig } from './aiConfigTypes'
 
 export function AiSettingsPanel() {
@@ -92,13 +85,11 @@ export function AiSettingsPanel() {
 
     setIsSaving(true)
     try {
-      const { publicKey } = await fetchAiPublicKey()
-      const encryptedApiKey = await rsaEncrypt(apiKey.trim(), publicKey)
       const { config: saved } = await saveAiConfig({
         provider,
         endpoint: endpoint.trim(),
         model: model.trim(),
-        encryptedApiKey,
+        apiKey: apiKey.trim(),
       })
       setConfig(saved)
       setApiKey('')

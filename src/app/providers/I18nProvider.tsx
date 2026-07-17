@@ -519,7 +519,7 @@ const translations: Record<Language, Record<string, string>> = {
 
     // AI Settings
     'ai.settings.title': 'AI 设置',
-    'ai.settings.subtitle': '配置你自己的 AI Provider，所有密钥均通过 RSA-256 加密后安全存储',
+    'ai.settings.subtitle': '配置你自己的 AI Provider，密钥通过 AES-256-GCM 加密后存储在云端',
     'ai.settings.signInRequired': '登录后即可配置 AI Provider',
     'ai.settings.provider': 'Provider',
     'ai.settings.endpoint': 'API Endpoint',
@@ -527,7 +527,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ai.settings.model': '模型名称',
     'ai.settings.apiKey': 'API Key',
     'ai.settings.encryptionHint':
-      'API Key 在浏览器端通过 RSA-256 加密后传输，服务端使用 AES-256-GCM 加密存储，明文密钥不会持久化。',
+      'API Key 通过 HTTPS 传输，服务端使用 AES-256-GCM 加密后存入数据库，明文密钥不会持久化。',
     'ai.settings.lastSaved': '上次保存',
     'ai.settings.save': '保存配置',
     'ai.settings.test': '测试连接',
@@ -1087,7 +1087,7 @@ const translations: Record<Language, Record<string, string>> = {
     // AI Settings
     'ai.settings.title': 'AI Settings',
     'ai.settings.subtitle':
-      'Configure your own AI provider. All keys are encrypted with RSA-256 before secure storage',
+      'Configure your own AI provider. Keys are encrypted with AES-256-GCM and stored in the cloud.',
     'ai.settings.signInRequired': 'Sign in to configure an AI provider',
     'ai.settings.provider': 'Provider',
     'ai.settings.endpoint': 'API Endpoint',
@@ -1095,7 +1095,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ai.settings.model': 'Model Name',
     'ai.settings.apiKey': 'API Key',
     'ai.settings.encryptionHint':
-      'API Key is encrypted with RSA-256 in the browser before transmission, then stored with AES-256-GCM on the server. Plaintext keys are never persisted.',
+      'API Key is transmitted over HTTPS and stored with AES-256-GCM encryption. Plaintext keys are never persisted.',
     'ai.settings.lastSaved': 'Last saved',
     'ai.settings.save': 'Save Config',
     'ai.settings.test': 'Test Connection',
