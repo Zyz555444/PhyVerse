@@ -1,10 +1,15 @@
-import { type FC, useState, useRef } from 'react'
+import { type FC, useState, useRef, useSyncExternalStore } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Line, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
 import { useIsMobile } from '@/shared/hooks/useIsMobile'
+import {
+  getMeasurementData,
+  subscribeMeasurementData,
+  setMeasurementData,
+} from './measurementDataStore'
 
 interface MeasurementOverlayProps {
   isRunning: boolean
@@ -74,11 +79,12 @@ function DistanceLine() {
   const { world } = usePhysics()
   const items = useSandboxStore((s) => s.items)
   const isMobile = useIsMobile()
+  const md = useSyncExternalStore(subscribeMeasurementData, getMeasurementData)
   const [distance, setDistance] = useState(0)
   const [midpoint, setMidpoint] = useState<[number, number, number]>([0, 0, 0])
 
-  const measurableItems = items.filter((it) => it.isDynamic).slice(0, 2)
-  const showDistance = measurableItems.length >= 2
+  const distanceTargets = md.distanceTargets
+  const showDistance = distanceTargets !== null
   const prevTimeRef = useRef(0)
 
   useFrame((_, delta) => {
@@ -87,13 +93,17 @@ function DistanceLine() {
     prevTimeRef.current = 0
 
     if (!showDistance || !world?.isReady) return
-    const a = world.getBody(measurableItems[0].id)
-    const b = world.getBody(measurableItems[1].id)
+    const a = world.getBody(distanceTargets[0])
+    const b = world.getBody(distanceTargets[1])
     if (!a || !b) return
     const pa = a.rigidBody.translation()
     const pb = b.rigidBody.translation()
-    setDistance(Math.sqrt((pb.x - pa.x) ** 2 + (pb.y - pa.y) ** 2 + (pb.z - pa.z) ** 2))
+    const d = Math.sqrt((pb.x - pa.x) ** 2 + (pb.y - pa.y) ** 2 + (pb.z - pa.z) ** 2)
+    setDistance(d)
     setMidpoint([(pa.x + pb.x) / 2, (pa.y + pb.y) / 2 + 0.3, (pa.z + pb.z) / 2])
+
+    // Also update the shared store so the toolbar reads the same value
+    setMeasurementData({ distance: d })
   })
 
   if (!showDistance) return null
@@ -101,8 +111,8 @@ function DistanceLine() {
   // Skip when objects are nearly overlapping
   if (distance < 0.2) return null
 
-  const [ax, ay, az] = measurableItems[0].position
-  const [bx, by, bz] = measurableItems[1].position
+  const [ax, ay, az] = items.find((it) => it.id === distanceTargets[0])?.position ?? [0, 0, 0]
+  const [bx, by, bz] = items.find((it) => it.id === distanceTargets[1])?.position ?? [0, 0, 0]
 
   return (
     <group>

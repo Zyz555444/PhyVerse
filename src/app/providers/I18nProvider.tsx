@@ -299,7 +299,8 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.freeFall.step1.desc': '场景中有一个小球放置在 5m 高度处。点击运行观察小球下落过程。',
     'recipe.freeFall.step1.hint': '注意观察小球的速度如何随时间变化',
     'recipe.freeFall.step2.title': '测量加速度',
-    'recipe.freeFall.step2.desc': '选中下落的小球，打开数据面板，记录小球在不同时刻的速度。计算加速度的值。',
+    'recipe.freeFall.step2.desc':
+      '选中下落的小球，打开数据面板，记录小球在不同时刻的速度。计算加速度的值。',
     'recipe.freeFall.step2.hint': '使用 v = gt 公式，g 约为 9.81 m/s²',
     'recipe.freeFall.step2.setup': '选择小球，查看右侧数据面板中的速度和加速度读数',
     'recipe.freeFall.step3.title': '改变高度',
@@ -311,11 +312,13 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.pendulum.objective1': '理解单摆的等时性原理',
     'recipe.pendulum.objective2': '探究摆长对周期的影响',
     'recipe.pendulum.step1.title': '观察单摆结构',
-    'recipe.pendulum.step1.desc': '场景中有一个悬挂在绳子上的摆球。观察摆球被拉离平衡位置后的运动。',
+    'recipe.pendulum.step1.desc':
+      '场景中有一个悬挂在绳子上的摆球。观察摆球被拉离平衡位置后的运动。',
     'recipe.pendulum.step1.hint': '绳子约束了摆球的运动轨迹',
     'recipe.pendulum.step1.setup': '摆球通过绳子连接在上方的固定点上',
     'recipe.pendulum.step2.title': '运行并观察周期',
-    'recipe.pendulum.step2.desc': '点击运行，观察摆球往复摆动的周期。尝试用数据面板记录每次通过最低点的时间。',
+    'recipe.pendulum.step2.desc':
+      '点击运行，观察摆球往复摆动的周期。尝试用数据面板记录每次通过最低点的时间。',
     'recipe.pendulum.step2.hint': '周期 T = 2π√(L/g)，与摆长有关与质量无关',
     'recipe.pendulum.step3.title': '改变摆长',
     'recipe.pendulum.step3.desc': '尝试通过调整绳子长度来改变摆长，观察周期如何变化。',
@@ -326,11 +329,13 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.ramp.objective1': '理解斜面受力分解',
     'recipe.ramp.objective2': '验证 a = gsinθ 的关系',
     'recipe.ramp.step1.title': '理解斜面结构',
-    'recipe.ramp.step1.desc': '场景中有一个 30° 的斜面，上面放置了一个滑块。滑块受到重力和斜面支持力的作用。',
+    'recipe.ramp.step1.desc':
+      '场景中有一个 30° 的斜面，上面放置了一个滑块。滑块受到重力和斜面支持力的作用。',
     'recipe.ramp.step1.hint': '重力沿斜面方向的分量为 mgsinθ',
     'recipe.ramp.step1.setup': '斜面倾角为 30°，滑块初始位置在斜面顶部',
     'recipe.ramp.step2.title': '测量加速度',
-    'recipe.ramp.step2.desc': '点击运行，观察滑块沿斜面下滑。使用数据面板记录滑块的速度变化，计算加速度。',
+    'recipe.ramp.step2.desc':
+      '点击运行，观察滑块沿斜面下滑。使用数据面板记录滑块的速度变化，计算加速度。',
     'recipe.ramp.step2.hint': '理论加速度 a = gsin30° = 4.9 m/s²',
     'recipe.ramp.step3.title': '改变斜面角度',
     'recipe.ramp.step3.desc': '尝试旋转斜面改变倾角，观察加速度如何随角度变化。',
@@ -341,11 +346,13 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.collision.objective1': '理解弹性碰撞和非弹性碰撞的区别',
     'recipe.collision.objective2': '验证动量守恒定律',
     'recipe.collision.step1.title': '观察碰撞场景',
-    'recipe.collision.step1.desc': '场景中有两个球体，红球质量较大，蓝球质量较小。它们将从两侧同时下落。',
+    'recipe.collision.step1.desc':
+      '场景中有两个球体，红球质量较大，蓝球质量较小。它们将从两侧同时下落。',
     'recipe.collision.step1.hint': '注意两个球的质量和弹性系数不同',
     'recipe.collision.step1.setup': '红球 2kg，蓝球 0.5kg，弹性系数均为 0.9',
     'recipe.collision.step2.title': '运行并观察碰撞',
-    'recipe.collision.step2.desc': '点击运行，观察两球碰撞后的运动状态。打开力矢量显示以观察碰撞瞬间的力。',
+    'recipe.collision.step2.desc':
+      '点击运行，观察两球碰撞后的运动状态。打开力矢量显示以观察碰撞瞬间的力。',
     'recipe.collision.step2.hint': '碰撞前后总动量守恒，总动能近似守恒',
     'recipe.collision.step3.title': '改变参数',
     'recipe.collision.step3.desc': '尝试修改球的质量或弹性系数，观察碰撞结果的变化。',
@@ -356,11 +363,13 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.forceField.objective1': '理解平方反比力场的特性',
     'recipe.forceField.objective2': '观察粒子在中心力场中的轨道运动',
     'recipe.forceField.step1.title': '认识力场源',
-    'recipe.forceField.step1.desc': '场景中有一个紫色的力场源和一个黄色测试粒子。力场源会对周围的动态物体施加引力。',
+    'recipe.forceField.step1.desc':
+      '场景中有一个紫色的力场源和一个黄色测试粒子。力场源会对周围的动态物体施加引力。',
     'recipe.forceField.step1.hint': '力场遵循平方反比定律 F ∝ 1/r²',
     'recipe.forceField.step1.setup': '力场源位于中心位置，测试粒子在右侧',
     'recipe.forceField.step2.title': '观察轨道运动',
-    'recipe.forceField.step2.desc': '点击运行，观察测试粒子在力场作用下的运动轨迹。打开轨迹显示以可视化运动路径。',
+    'recipe.forceField.step2.desc':
+      '点击运行，观察测试粒子在力场作用下的运动轨迹。打开轨迹显示以可视化运动路径。',
     'recipe.forceField.step2.hint': '粒子可能形成椭圆轨道、圆形轨道或逃逸轨迹',
     'recipe.forceField.step3.title': '改变初始条件',
     'recipe.forceField.step3.desc': '尝试拖动测试粒子到不同位置释放，观察轨道形状的变化。',
@@ -371,14 +380,17 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.thermal.objective1': '理解热传导的基本原理',
     'recipe.thermal.objective2': '观察温度梯度与热流方向',
     'recipe.thermal.step1.title': '认识热传导模型',
-    'recipe.thermal.step1.desc': '场景中有一个红色热源、蓝色冷源和连接它们的金属桥。热源代表高温区域，冷源代表低温区域。',
+    'recipe.thermal.step1.desc':
+      '场景中有一个红色热源、蓝色冷源和连接它们的金属桥。热源代表高温区域，冷源代表低温区域。',
     'recipe.thermal.step1.hint': '热量从高温物体流向低温物体',
     'recipe.thermal.step1.setup': '热源（红色）和冷源（蓝色）通过金属桥连接',
     'recipe.thermal.step2.title': '观察能量流动',
-    'recipe.thermal.step2.desc': '打开能量条显示，观察各个物体的能量变化。注意热源能量减少、冷源能量增加。',
+    'recipe.thermal.step2.desc':
+      '打开能量条显示，观察各个物体的能量变化。注意热源能量减少、冷源能量增加。',
     'recipe.thermal.step2.hint': '总能量守恒，但热能从高温流向低温',
     'recipe.thermal.step3.title': '改变材料',
-    'recipe.thermal.step3.desc': '尝试修改金属桥的材质（属性面板中修改），观察不同材料对热传导速率的影响。',
+    'recipe.thermal.step3.desc':
+      '尝试修改金属桥的材质（属性面板中修改），观察不同材料对热传导速率的影响。',
     'recipe.thermal.step3.hint': '金属导热快，塑料导热慢',
 
     'recipe.optics.title': '光的反射',
@@ -386,7 +398,8 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.optics.objective1': '理解光的反射定律',
     'recipe.optics.objective2': '观察入射角等于反射角',
     'recipe.optics.step1.title': '认识光学元件',
-    'recipe.optics.step1.desc': '场景中有一个平面镜（蓝色玻璃板）和一个光源（黄色小球）。光源代表入射光线的起点。',
+    'recipe.optics.step1.desc':
+      '场景中有一个平面镜（蓝色玻璃板）和一个光源（黄色小球）。光源代表入射光线的起点。',
     'recipe.optics.step1.hint': '平面镜的反射面朝向光源方向',
     'recipe.optics.step1.setup': '平面镜竖直放置，光源在左侧',
     'recipe.optics.step2.title': '观察反射',
@@ -398,7 +411,8 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.waves.objective1': '理解简谐振动的特征',
     'recipe.waves.objective2': '探究弹簧劲度系数对振动频率的影响',
     'recipe.waves.step1.title': '认识弹簧振子',
-    'recipe.waves.step1.desc': '场景中有一个通过弹簧悬挂在固定点上的小球。弹簧提供回复力使小球做往复振动。',
+    'recipe.waves.step1.desc':
+      '场景中有一个通过弹簧悬挂在固定点上的小球。弹簧提供回复力使小球做往复振动。',
     'recipe.waves.step1.hint': '弹簧回复力 F = -kx，指向平衡位置',
     'recipe.waves.step1.setup': '弹簧连接上方固定锚点和下方小球',
     'recipe.waves.step2.title': '观察振动',
@@ -715,120 +729,159 @@ const translations: Record<Language, Record<string, string>> = {
     'recipe.difficulty.advanced': 'Advanced',
 
     'recipe.freeFall.title': 'Free Fall',
-    'recipe.freeFall.description': 'Observe a ball falling under gravity and measure gravitational acceleration',
+    'recipe.freeFall.description':
+      'Observe a ball falling under gravity and measure gravitational acceleration',
     'recipe.freeFall.objective1': 'Understand the concept of gravitational acceleration',
     'recipe.freeFall.objective2': 'Learn to use kinematic equations to calculate fall distance',
     'recipe.freeFall.step1.title': 'Observe Initial State',
-    'recipe.freeFall.step1.desc': 'A ball is placed at 5m height. Press Run to observe the falling process.',
+    'recipe.freeFall.step1.desc':
+      'A ball is placed at 5m height. Press Run to observe the falling process.',
     'recipe.freeFall.step1.hint': 'Watch how the velocity changes over time',
     'recipe.freeFall.step2.title': 'Measure Acceleration',
-    'recipe.freeFall.step2.desc': 'Select the falling ball, open the data panel, and record the velocity at different times. Calculate the acceleration.',
+    'recipe.freeFall.step2.desc':
+      'Select the falling ball, open the data panel, and record the velocity at different times. Calculate the acceleration.',
     'recipe.freeFall.step2.hint': 'Use v = gt, where g ≈ 9.81 m/s²',
-    'recipe.freeFall.step2.setup': 'Select the ball and check velocity/acceleration readings in the data panel',
+    'recipe.freeFall.step2.setup':
+      'Select the ball and check velocity/acceleration readings in the data panel',
     'recipe.freeFall.step3.title': 'Vary the Height',
-    'recipe.freeFall.step3.desc': 'Try dragging the ball to different heights and observe how landing time and velocity change.',
+    'recipe.freeFall.step3.desc':
+      'Try dragging the ball to different heights and observe how landing time and velocity change.',
     'recipe.freeFall.step3.hint': 'Higher drop → greater landing speed, consistent with h = ½gt²',
 
     'recipe.pendulum.title': 'Pendulum Motion',
-    'recipe.pendulum.description': 'Study periodic pendulum motion and the relationship between length and period',
+    'recipe.pendulum.description':
+      'Study periodic pendulum motion and the relationship between length and period',
     'recipe.pendulum.objective1': 'Understand the isochronism principle of a pendulum',
     'recipe.pendulum.objective2': 'Explore how pendulum length affects period',
     'recipe.pendulum.step1.title': 'Observe the Pendulum',
-    'recipe.pendulum.step1.desc': 'A bob is suspended by a rope. Observe the motion when the bob is displaced from equilibrium.',
+    'recipe.pendulum.step1.desc':
+      'A bob is suspended by a rope. Observe the motion when the bob is displaced from equilibrium.',
     'recipe.pendulum.step1.hint': 'The rope constrains the bob to a circular arc',
     'recipe.pendulum.step1.setup': 'The bob is connected to the fixed anchor above via a rope',
     'recipe.pendulum.step2.title': 'Run and Observe Period',
-    'recipe.pendulum.step2.desc': 'Press Run and observe the oscillation period. Use the data panel to record the time at each lowest point.',
+    'recipe.pendulum.step2.desc':
+      'Press Run and observe the oscillation period. Use the data panel to record the time at each lowest point.',
     'recipe.pendulum.step2.hint': 'Period T = 2π√(L/g), depends on length not mass',
     'recipe.pendulum.step3.title': 'Change Pendulum Length',
-    'recipe.pendulum.step3.desc': 'Try adjusting the rope length to change the pendulum length and observe how the period changes.',
+    'recipe.pendulum.step3.desc':
+      'Try adjusting the rope length to change the pendulum length and observe how the period changes.',
     'recipe.pendulum.step3.hint': 'Shorter length → smaller period',
 
     'recipe.ramp.title': 'Inclined Plane Acceleration',
-    'recipe.ramp.description': 'Study acceleration of an object on an inclined plane and verify Newton\'s Second Law',
+    'recipe.ramp.description':
+      "Study acceleration of an object on an inclined plane and verify Newton's Second Law",
     'recipe.ramp.objective1': 'Understand force decomposition on an incline',
     'recipe.ramp.objective2': 'Verify a = gsinθ relationship',
     'recipe.ramp.step1.title': 'Understand the Ramp Setup',
-    'recipe.ramp.step1.desc': 'A 30° inclined plane with a block on top. The block experiences gravity and normal force from the plane.',
+    'recipe.ramp.step1.desc':
+      'A 30° inclined plane with a block on top. The block experiences gravity and normal force from the plane.',
     'recipe.ramp.step1.hint': 'The component of gravity along the plane is mgsinθ',
     'recipe.ramp.step1.setup': 'Ramp angle is 30°, block starts at the top of the ramp',
     'recipe.ramp.step2.title': 'Measure Acceleration',
-    'recipe.ramp.step2.desc': 'Press Run and observe the block sliding down. Use the data panel to record velocity changes and calculate acceleration.',
+    'recipe.ramp.step2.desc':
+      'Press Run and observe the block sliding down. Use the data panel to record velocity changes and calculate acceleration.',
     'recipe.ramp.step2.hint': 'Theoretical acceleration a = gsin30° = 4.9 m/s²',
     'recipe.ramp.step3.title': 'Change Ramp Angle',
-    'recipe.ramp.step3.desc': 'Try rotating the ramp to change the angle and observe how acceleration varies.',
+    'recipe.ramp.step3.desc':
+      'Try rotating the ramp to change the angle and observe how acceleration varies.',
     'recipe.ramp.step3.hint': 'Larger angle → greater acceleration (max = g)',
 
     'recipe.collision.title': 'Collision Experiment',
-    'recipe.collision.description': 'Study momentum and kinetic energy changes before and after collision, verify conservation of momentum',
-    'recipe.collision.objective1': 'Understand the difference between elastic and inelastic collisions',
+    'recipe.collision.description':
+      'Study momentum and kinetic energy changes before and after collision, verify conservation of momentum',
+    'recipe.collision.objective1':
+      'Understand the difference between elastic and inelastic collisions',
     'recipe.collision.objective2': 'Verify the law of conservation of momentum',
     'recipe.collision.step1.title': 'Observe the Collision Setup',
-    'recipe.collision.step1.desc': 'Two spheres: a heavier red ball and a lighter blue ball. They will fall from opposite sides.',
+    'recipe.collision.step1.desc':
+      'Two spheres: a heavier red ball and a lighter blue ball. They will fall from opposite sides.',
     'recipe.collision.step1.hint': 'Note the different masses and elasticity coefficients',
     'recipe.collision.step1.setup': 'Red ball 2kg, blue ball 0.5kg, restitution 0.9',
     'recipe.collision.step2.title': 'Run and Observe Collision',
-    'recipe.collision.step2.desc': 'Press Run and observe the post-collision motion. Enable force vectors to visualize the collision forces.',
-    'recipe.collision.step2.hint': 'Total momentum is conserved, total kinetic energy is approximately conserved',
+    'recipe.collision.step2.desc':
+      'Press Run and observe the post-collision motion. Enable force vectors to visualize the collision forces.',
+    'recipe.collision.step2.hint':
+      'Total momentum is conserved, total kinetic energy is approximately conserved',
     'recipe.collision.step3.title': 'Change Parameters',
-    'recipe.collision.step3.desc': 'Try modifying the mass or restitution coefficient and observe how the collision results change.',
+    'recipe.collision.step3.desc':
+      'Try modifying the mass or restitution coefficient and observe how the collision results change.',
     'recipe.collision.step3.hint': 'Reduce restitution to simulate inelastic collisions',
 
     'recipe.forceField.title': 'Force Field Exploration',
-    'recipe.forceField.description': 'Place a force field source in the scene and observe particle trajectories in the field',
+    'recipe.forceField.description':
+      'Place a force field source in the scene and observe particle trajectories in the field',
     'recipe.forceField.objective1': 'Understand the inverse-square force field behavior',
     'recipe.forceField.objective2': 'Observe orbital motion of particles in a central force field',
     'recipe.forceField.step1.title': 'Meet the Force Field Source',
-    'recipe.forceField.step1.desc': 'A purple force field source and a yellow test particle. The source attracts nearby dynamic objects.',
+    'recipe.forceField.step1.desc':
+      'A purple force field source and a yellow test particle. The source attracts nearby dynamic objects.',
     'recipe.forceField.step1.hint': 'The force follows the inverse-square law F ∝ 1/r²',
     'recipe.forceField.step1.setup': 'Force source at center, test particle on the right',
     'recipe.forceField.step2.title': 'Observe Orbital Motion',
-    'recipe.forceField.step2.desc': 'Press Run and observe the test particle\'s trajectory under the force field. Enable trajectory display.',
-    'recipe.forceField.step2.hint': 'Particles may form elliptical, circular, or escape trajectories',
+    'recipe.forceField.step2.desc':
+      "Press Run and observe the test particle's trajectory under the force field. Enable trajectory display.",
+    'recipe.forceField.step2.hint':
+      'Particles may form elliptical, circular, or escape trajectories',
     'recipe.forceField.step3.title': 'Change Initial Conditions',
-    'recipe.forceField.step3.desc': 'Try dragging the test particle to different positions and observe how the orbit shape changes.',
-    'recipe.forceField.step3.hint': 'Initial velocity determines orbit type: circular, elliptical, or parabolic',
+    'recipe.forceField.step3.desc':
+      'Try dragging the test particle to different positions and observe how the orbit shape changes.',
+    'recipe.forceField.step3.hint':
+      'Initial velocity determines orbit type: circular, elliptical, or parabolic',
 
     'recipe.thermal.title': 'Heat Conduction',
-    'recipe.thermal.description': 'Observe heat conduction in solids and understand thermal equilibrium',
+    'recipe.thermal.description':
+      'Observe heat conduction in solids and understand thermal equilibrium',
     'recipe.thermal.objective1': 'Understand the basic principles of heat conduction',
     'recipe.thermal.objective2': 'Observe temperature gradient and heat flow direction',
     'recipe.thermal.step1.title': 'Understand the Conduction Model',
-    'recipe.thermal.step1.desc': 'A red heat source, blue cold source, and a metal bridge connecting them. Hot and cold represent high and low temperature regions.',
+    'recipe.thermal.step1.desc':
+      'A red heat source, blue cold source, and a metal bridge connecting them. Hot and cold represent high and low temperature regions.',
     'recipe.thermal.step1.hint': 'Heat flows from high temperature to low temperature',
-    'recipe.thermal.step1.setup': 'Heat source (red) and cold source (blue) connected by a metal bridge',
+    'recipe.thermal.step1.setup':
+      'Heat source (red) and cold source (blue) connected by a metal bridge',
     'recipe.thermal.step2.title': 'Observe Energy Flow',
-    'recipe.thermal.step2.desc': 'Enable the energy bar display and observe energy changes in each object. Note the heat source loses energy, cold source gains energy.',
+    'recipe.thermal.step2.desc':
+      'Enable the energy bar display and observe energy changes in each object. Note the heat source loses energy, cold source gains energy.',
     'recipe.thermal.step2.hint': 'Total energy is conserved, but heat flows from hot to cold',
     'recipe.thermal.step3.title': 'Change Materials',
-    'recipe.thermal.step3.desc': 'Try modifying the bridge material (in the properties panel) and observe how different materials affect conduction rate.',
+    'recipe.thermal.step3.desc':
+      'Try modifying the bridge material (in the properties panel) and observe how different materials affect conduction rate.',
     'recipe.thermal.step3.hint': 'Metals conduct heat quickly, plastics conduct slowly',
 
     'recipe.optics.title': 'Light Reflection',
-    'recipe.optics.description': 'Observe light reflection on a plane mirror and verify the law of reflection',
+    'recipe.optics.description':
+      'Observe light reflection on a plane mirror and verify the law of reflection',
     'recipe.optics.objective1': 'Understand the law of reflection',
-    'recipe.optics.objective2': 'Observe that the angle of incidence equals the angle of reflection',
+    'recipe.optics.objective2':
+      'Observe that the angle of incidence equals the angle of reflection',
     'recipe.optics.step1.title': 'Meet the Optical Components',
-    'recipe.optics.step1.desc': 'A plane mirror (blue glass plate) and a light source (yellow sphere). The source represents the origin of incident light.',
+    'recipe.optics.step1.desc':
+      'A plane mirror (blue glass plate) and a light source (yellow sphere). The source represents the origin of incident light.',
     'recipe.optics.step1.hint': 'The reflective surface faces the light source',
     'recipe.optics.step1.setup': 'Plane mirror placed vertically, light source on the left',
     'recipe.optics.step2.title': 'Observe Reflection',
-    'recipe.optics.step2.desc': 'Observe the line from source to mirror (incident ray) and the direction of reflection.',
-    'recipe.optics.step2.hint': 'Angle of incidence = angle of reflection, on opposite sides of the normal',
+    'recipe.optics.step2.desc':
+      'Observe the line from source to mirror (incident ray) and the direction of reflection.',
+    'recipe.optics.step2.hint':
+      'Angle of incidence = angle of reflection, on opposite sides of the normal',
 
     'recipe.waves.title': 'Spring Oscillator',
-    'recipe.waves.description': 'Study simple harmonic motion of a spring-mass system, observe amplitude, frequency and period',
+    'recipe.waves.description':
+      'Study simple harmonic motion of a spring-mass system, observe amplitude, frequency and period',
     'recipe.waves.objective1': 'Understand the characteristics of simple harmonic motion',
     'recipe.waves.objective2': 'Explore how spring stiffness affects oscillation frequency',
     'recipe.waves.step1.title': 'Meet the Spring Oscillator',
-    'recipe.waves.step1.desc': 'A ball suspended by a spring from a fixed point. The spring provides a restoring force for oscillatory motion.',
+    'recipe.waves.step1.desc':
+      'A ball suspended by a spring from a fixed point. The spring provides a restoring force for oscillatory motion.',
     'recipe.waves.step1.hint': 'Spring restoring force F = -kx, directed toward equilibrium',
     'recipe.waves.step1.setup': 'Spring connects the upper fixed anchor to the lower ball',
     'recipe.waves.step2.title': 'Observe Oscillation',
-    'recipe.waves.step2.desc': 'Press Run and observe the vertical oscillation. Enable trajectory display to visualize the path.',
+    'recipe.waves.step2.desc':
+      'Press Run and observe the vertical oscillation. Enable trajectory display to visualize the path.',
     'recipe.waves.step2.hint': 'Period T = 2π√(m/k), independent of amplitude',
     'recipe.waves.step3.title': 'Change Parameters',
-    'recipe.waves.step3.desc': 'Try modifying the ball mass or spring stiffness (in the properties panel) and observe changes in period and frequency.',
+    'recipe.waves.step3.desc':
+      'Try modifying the ball mass or spring stiffness (in the properties panel) and observe changes in period and frequency.',
     'recipe.waves.step3.hint': 'Larger mass → longer period, larger stiffness → shorter period',
 
     // Measurement tools

@@ -46,6 +46,7 @@ import { AITutorPanel } from '@/ai/AITutorPanel'
 import { RecipePanel } from '@/features/recipe/RecipePanel'
 import { type Recipe } from '@/features/recipe/recipeTypes'
 import { MeasurementOverlay } from '@/features/measurement/MeasurementOverlay'
+import { MeasurementDataCollector } from '@/features/measurement/measurementDataStore'
 import { MeasurementToolbar } from '@/features/measurement/MeasurementToolbar'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
 import { Button } from '@/shared/ui/Button'
@@ -984,6 +985,7 @@ export function Sandbox() {
                 <EnergyBar isRunning={isRunning} />
                 <ForceFieldRenderer isRunning={isRunning} />
                 <MeasurementOverlay isRunning={isRunning} />
+                <MeasurementDataCollector />
                 <BoxSelection />
                 <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
                 <SandboxJoints />

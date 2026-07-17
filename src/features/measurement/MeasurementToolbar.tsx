@@ -1,38 +1,22 @@
-import { useMemo, useState, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { Gauge, Ruler, ChevronDown, ChevronUp } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
-import { usePhysics } from '@/features/physics/usePhysics'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
 import { getFriendlyName } from '@/features/sandbox/friendlyName'
-
-interface MeasurementReading {
-  speed: number
-  accel: number
-  ke: number
-  pe: number
-  totalEnergy: number
-  posY: number
-}
+import {
+  getMeasurementData,
+  subscribeMeasurementData,
+  setMeasurementData,
+} from './measurementDataStore'
 
 export function MeasurementToolbar() {
   const { t } = useI18n()
-  const { world } = usePhysics()
   const items = useSandboxStore((s) => s.items)
   const selectedId = useSandboxStore((s) => s.selectedId)
-  const gravity = useSandboxStore((s) => s.gravity)
   const [expanded, setExpanded] = useState(false)
-  const [reading, setReading] = useState<MeasurementReading>({
-    speed: 0,
-    accel: 0,
-    ke: 0,
-    pe: 0,
-    totalEnergy: 0,
-    posY: 0,
-  })
-  const [distanceTargets, setDistanceTargets] = useState<[string, string] | null>(null)
-  const [distance, setDistance] = useState(0)
+
+  const reading = useSyncExternalStore(subscribeMeasurementData, getMeasurementData)
 
   const selectedItem = useMemo(() => items.find((it) => it.id === selectedId), [items, selectedId])
 
@@ -41,59 +25,15 @@ export function MeasurementToolbar() {
     return getFriendlyName(items, selectedId)
   }, [items, selectedId])
 
-  const throttleRef = useRef(0)
-
-  // Update readings from physics (throttled to ~10fps)
-  useFrame((_, delta) => {
-    throttleRef.current += delta
-    if (throttleRef.current < 0.1) return
-    throttleRef.current = 0
-
-    if (!selectedId || !world?.isReady) return
-    const record = world.getBody(selectedId)
-    if (!record) return
-    const item = items.find((it) => it.id === selectedId)
-    if (!item) return
-
-    const rb = record.rigidBody
-    const pos = rb.translation()
-    const v = rb.linvel()
-    const speed = Math.hypot(v.x, v.y, v.z)
-    const ke = 0.5 * item.mass * speed * speed
-    const pe = item.mass * Math.abs(gravity[1]) * Math.max(0, pos.y)
-
-    setReading({
-      speed,
-      accel: 0, // would need delta tracking
-      ke,
-      pe,
-      totalEnergy: ke + pe,
-      posY: pos.y,
-    })
-
-    // Distance measurement
-    if (distanceTargets) {
-      const [aId, bId] = distanceTargets
-      const a = world.getBody(aId)
-      const b = world.getBody(bId)
-      if (a && b) {
-        const pa = a.rigidBody.translation()
-        const pb = b.rigidBody.translation()
-        setDistance(Math.sqrt((pb.x - pa.x) ** 2 + (pb.y - pa.y) ** 2 + (pb.z - pa.z) ** 2))
-      }
-    }
-  })
-
   const dynamicItems = useMemo(() => items.filter((it) => it.isDynamic), [items])
 
   const handleToggleDistance = () => {
-    if (distanceTargets) {
-      setDistanceTargets(null)
-      setDistance(0)
+    if (reading.distanceTargets) {
+      setMeasurementData({ distanceTargets: null, distance: 0 })
     } else {
       const dynItems = items.filter((it) => it.isDynamic)
       if (dynItems.length >= 2) {
-        setDistanceTargets([dynItems[0].id, dynItems[1].id])
+        setMeasurementData({ distanceTargets: [dynItems[0].id, dynItems[1].id] })
       }
     }
   }
@@ -212,23 +152,23 @@ export function MeasurementToolbar() {
                 disabled={dynamicItems.length < 2}
                 className="text-[10px] h-6 px-2"
               >
-                {distanceTargets ? t('measurement.clear') : t('measurement.measure')}
+                {reading.distanceTargets ? t('measurement.clear') : t('measurement.measure')}
               </Button>
             </div>
 
-            {distanceTargets && (
+            {reading.distanceTargets && (
               <div className="rounded bg-background px-2 py-1.5 text-center animate-in fade-in">
                 <span className="font-mono text-sm font-bold text-accent">
-                  {distance.toFixed(2)} m
+                  {reading.distance.toFixed(2)} m
                 </span>
                 <div className="mt-0.5 text-[9px] text-text-tertiary">
-                  {getFriendlyName(items, distanceTargets[0])} →{' '}
-                  {getFriendlyName(items, distanceTargets[1])}
+                  {getFriendlyName(items, reading.distanceTargets[0])} →{' '}
+                  {getFriendlyName(items, reading.distanceTargets[1])}
                 </div>
               </div>
             )}
 
-            {!distanceTargets && dynamicItems.length >= 2 && (
+            {!reading.distanceTargets && dynamicItems.length >= 2 && (
               <p className="text-[9px] text-text-tertiary">{t('measurement.distanceHint')}</p>
             )}
           </div>
