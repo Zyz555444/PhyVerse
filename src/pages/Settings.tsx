@@ -6,7 +6,8 @@ import { Button } from '@/shared/ui/Button'
 import { Slider } from '@/shared/ui/Slider'
 import { Switch } from '@/shared/ui/Switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/Card'
-import { RotateCcw, Download, Info, Palette, Globe, SlidersHorizontal } from 'lucide-react'
+import { RotateCcw, Download, Info, Palette, Globe, SlidersHorizontal, Cpu } from 'lucide-react'
+import { AiSettingsPanel } from '@/features/ai/AiSettingsPanel'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -111,6 +112,19 @@ export function Settings() {
                 </Button>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-accent" />
+              {t('ai.settings.title')}
+            </CardTitle>
+            <CardDescription>{t('ai.settings.subtitle')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AiSettingsPanel />
           </CardContent>
         </Card>
 
