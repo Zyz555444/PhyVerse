@@ -5,7 +5,7 @@ export interface AgentToolParameter {
   description: string
   enum?: string[]
   items?: AgentToolParameter
-}}
+}
 
 export interface AgentTool {
   type: 'function'
