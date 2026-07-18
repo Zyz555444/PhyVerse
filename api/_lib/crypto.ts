@@ -39,11 +39,17 @@ export async function getOrCreateAesKey(): Promise<{ key: Buffer; version: numbe
   const envKey = await loadKeyFromEnv()
   if (envKey) {
     const dbEntry = await loadKeyFromDb()
+    if (dbEntry && envKey.equals(dbEntry.key)) {
+      _aesKey = envKey
+      _keyVersion = dbEntry.version
+      console.log('[crypto] key source=env version=%d (unchanged)', _keyVersion)
+      return { key: _aesKey, version: _keyVersion }
+    }
     const nextVersion = dbEntry ? dbEntry.version + 1 : 1
     await persistKey(envKey, nextVersion)
     _aesKey = envKey
     _keyVersion = nextVersion
-    console.log('[crypto] key source=env version=%d', nextVersion)
+    console.log('[crypto] key source=env version=%d (rotated)', nextVersion)
     return { key: _aesKey, version: _keyVersion }
   }
 
