@@ -83,13 +83,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
               api_key_encrypted = ${bundle.encrypted},
               api_key_iv = ${bundle.iv},
               api_key_tag = ${bundle.tag},
+              key_version = ${bundle.keyVersion},
               updated_at = NOW()
           WHERE user_id = ${authUser.userId}
           RETURNING id, provider, endpoint, model, created_at, updated_at
         `
       } else {
         result = await sql`
-          INSERT INTO ai_configs (user_id, provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag)
+          INSERT INTO ai_configs (user_id, provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag, key_version)
           VALUES (
             ${authUser.userId},
             ${provider},
@@ -97,7 +98,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             ${model},
             ${bundle.encrypted},
             ${bundle.iv},
-            ${bundle.tag}
+            ${bundle.tag},
+            ${bundle.keyVersion}
           )
           RETURNING id, provider, endpoint, model, created_at, updated_at
         `

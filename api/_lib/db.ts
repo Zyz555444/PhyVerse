@@ -45,6 +45,7 @@ export async function ensureTables(): Promise<void> {
         api_key_encrypted TEXT NOT NULL,
         api_key_iv TEXT NOT NULL,
         api_key_tag TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(user_id)
@@ -54,7 +55,10 @@ export async function ensureTables(): Promise<void> {
       CREATE TABLE IF NOT EXISTS app_secrets (
         key_name TEXT PRIMARY KEY,
         key_value TEXT NOT NULL,
+        key_version INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
+  await sql`ALTER TABLE app_secrets ADD COLUMN IF NOT EXISTS key_version INTEGER NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE ai_configs ADD COLUMN IF NOT EXISTS key_version INTEGER NOT NULL DEFAULT 0`
 }

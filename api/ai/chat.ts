@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { sql, ensureTables } from '../_lib/db.js'
 import { getAuthUser } from '../_lib/auth.js'
 import { handleCors } from '../_lib/cors.js'
-import { aesDecrypt } from '../_lib/crypto.js'
+import { aesDecrypt, KeyVersionMismatchError } from '../_lib/crypto.js'
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -47,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     console.log('[ai/chat] step=selectConfig userId=%s', authUser.userId)
     const configResult = await sql`
-      SELECT provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag
+      SELECT provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag, key_version
       FROM ai_configs
       WHERE user_id = ${authUser.userId}
     `
@@ -66,10 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         encrypted: config.api_key_encrypted,
         iv: config.api_key_iv,
         tag: config.api_key_tag,
+        keyVersion: config.key_version ?? 0,
       })
     } catch (decryptErr) {
       console.error('[ai/chat] step=decryptFailed error=%s', (decryptErr as Error).message)
-      res.status(500).json({ error: 'Failed to decrypt API key. Please reconfigure your AI provider in settings.' })
+      if (decryptErr instanceof KeyVersionMismatchError) {
+        res.status(500).json({ error: 'Encryption key has changed. Please reconfigure your AI provider in settings.' })
+      } else {
+        res.status(500).json({ error: 'Failed to decrypt API key. Please reconfigure your AI provider in settings.' })
+      }
       return
     }
 
