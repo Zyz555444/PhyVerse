@@ -4,7 +4,8 @@ export interface AgentToolParameter {
   type: string
   description: string
   enum?: string[]
-}
+  items?: AgentToolParameter
+}}
 
 export interface AgentTool {
   type: 'function'
@@ -96,7 +97,7 @@ export const AGENT_TOOLS: AgentTool[] = [
       parameters: {
         type: 'object',
         properties: {
-          type: {
+          shape: {
             type: 'string',
             description: '物体类型：box, sphere, cylinder, ramp',
             enum: ['box', 'sphere', 'cylinder', 'ramp'],
@@ -106,16 +107,18 @@ export const AGENT_TOOLS: AgentTool[] = [
             description: '物体显示名称',
           },
           position: {
-            type: 'string',
-            description: '位置坐标 JSON 数组 [x, y, z]，例如 [0, 2, 0]',
+            type: 'array',
+            items: { type: 'number' },
+            description: '位置坐标 [x, y, z]，例如 [0, 2, 0]',
           },
           size: {
-            type: 'string',
-            description: '尺寸 JSON 数组 [width, height, depth]，例如 [1, 1, 1]',
+            type: 'array',
+            items: { type: 'number' },
+            description: '尺寸 [width, height, depth]，例如 [1, 1, 1]',
           },
           color: {
             type: 'string',
-            description: '颜色十六进制字符串，例如 #3b82f6',
+            description: '颜色十六进制，例如 #3b82f6',
           },
           mass: {
             type: 'number',
@@ -126,7 +129,7 @@ export const AGENT_TOOLS: AgentTool[] = [
             description: '是否可运动，默认 true',
           },
         },
-        required: ['type', 'position'],
+        required: ['shape', 'position'],
       },
     },
   },
@@ -217,8 +220,9 @@ export const AGENT_TOOLS: AgentTool[] = [
             description: '目标物体 ID 或名称',
           },
           force: {
-            type: 'string',
-            description: '冲量向量 JSON 数组 [x, y, z]，例如 [5, 0, 0]',
+            type: 'array',
+            items: { type: 'number' },
+            description: '冲量向量 [x, y, z]，例如 [5, 0, 0]',
           },
         },
         required: ['itemId', 'force'],
@@ -269,15 +273,20 @@ function findItemByIdOrName(items: SandboxItem[], idOrName: string): SandboxItem
   return items.find((it) => it.id === idOrName || (it.displayName ?? it.id) === idOrName)
 }
 
-function parseVector(raw: string | undefined, defaultValue: number[]): number[] {
+function parseVector(raw: string | unknown[] | undefined, defaultValue: number[]): number[] {
   if (!raw) return defaultValue
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'number')) {
-      return parsed
+  if (Array.isArray(raw) && raw.every((v) => typeof v === 'number')) {
+    return raw as number[]
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'number')) {
+        return parsed
+      }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
   return defaultValue
 }
@@ -336,16 +345,16 @@ export async function executeTool(
     }
 
     case 'add_object': {
-      const type = args.type as SandboxShape | undefined
+      const type = args.shape as SandboxShape | undefined
       if (!type) {
         return { success: false, message: '缺少物体类型参数' }
       }
-      const position = parseVector(args.position as string | undefined, [0, 2, 0]) as [
+      const position = parseVector(args.position as unknown[] | string | undefined, [0, 2, 0]) as [
         number,
         number,
         number,
       ]
-      const size = parseVector(args.size as string | undefined, [1, 1, 1]) as [
+      const size = parseVector(args.size as unknown[] | string | undefined, [1, 1, 1]) as [
         number,
         number,
         number,
@@ -399,7 +408,7 @@ export async function executeTool(
       if (!item) {
         return { success: false, message: `未找到物体 "${itemId}"。` }
       }
-      const force = parseVector(args.force as string | undefined, [1, 0, 0]) as [
+      const force = parseVector(args.force as unknown[] | string | undefined, [1, 0, 0]) as [
         number,
         number,
         number,

@@ -78,10 +78,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return
     }
 
+    let actuallyStreaming = stream ?? true
     const requestBody: Record<string, unknown> = {
       model: config.model,
       messages,
-      stream: stream ?? true,
+      stream: actuallyStreaming,
     }
     if (tools && tools.length > 0) {
       requestBody.tools = tools
@@ -94,8 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     console.log('[ai/chat] step=callUpstream endpoint=%s model=%s stream=%s',
-      config.endpoint, config.model, stream ?? true)
-    const upstreamResponse = await fetch(config.endpoint, {
+      config.endpoint, config.model, actuallyStreaming)
+    let upstreamResponse = await fetch(config.endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -103,6 +104,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       },
       body: JSON.stringify(requestBody),
     })
+
+    if (!upstreamResponse.ok && requestBody.tools && actuallyStreaming) {
+      const errorText = await upstreamResponse.text()
+      const isJsonError =
+        errorText.includes('Invalid JSON') || errorText.includes('tool call')
+      if (isJsonError) {
+        console.log('[ai/chat] step=retryNonStreaming reason=%s', errorText.slice(0, 200))
+        actuallyStreaming = false
+        requestBody.stream = false
+        upstreamResponse = await fetch(config.endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(requestBody),
+        })
+      } else {
+        console.error('[ai/chat] step=upstreamError status=%d body=%s',
+          upstreamResponse.status, errorText.slice(0, 500))
+        res.status(upstreamResponse.status).json({ error: errorText || 'AI request failed' })
+        return
+      }
+    }
 
     if (!upstreamResponse.ok) {
       const errorText = await upstreamResponse.text()
@@ -112,9 +137,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return
     }
 
-    if (!upstreamResponse.body || !stream) {
+    if (!upstreamResponse.body || !actuallyStreaming) {
       console.log('[ai/chat] step=returningJson')
       const data = await upstreamResponse.json()
+      if (!actuallyStreaming) {
+        res.setHeader('Content-Type', 'text/event-stream')
+        res.setHeader('Cache-Control', 'no-cache')
+        res.setHeader('Connection', 'keep-alive')
+        const message = data.choices?.[0]?.message
+        if (message) {
+          if (message.content) {
+            res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: message.content } }] })}\n\n`)
+          }
+          if (message.tool_calls) {
+            for (let i = 0; i < message.tool_calls.length; i++) {
+              const tc = message.tool_calls[i]
+              res.write(`data: ${JSON.stringify({
+                choices: [{ delta: { tool_calls: [{ index: i, id: tc.id, function: { name: tc.function.name, arguments: tc.function.arguments } }] } }]
+              })}\n\n`)
+            }
+          }
+        }
+        res.write('data: [DONE]\n\n')
+        res.end()
+        return
+      }
       res.status(200).json(data)
       return
     }

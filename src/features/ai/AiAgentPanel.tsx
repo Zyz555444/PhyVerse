@@ -322,7 +322,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           return [...prev.slice(0, -1), { ...last, isStreaming: false }]
         })
       } catch (err) {
-        console.error('Follow-up error:', err)
+        const raw = err instanceof Error ? err.message : String(err)
+        console.error('Follow-up error:', raw)
+        setError(raw.includes('Invalid JSON')
+          ? 'AI 生成格式出错，请重试'
+          : raw.slice(0, 120))
       }
     },
     [config]
@@ -429,7 +433,25 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         return [...prev.slice(0, -1), finalMessage]
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const raw = err instanceof Error ? err.message : String(err)
+      let friendly = raw
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed.error?.metadata?.raw) {
+          const inner = JSON.parse(parsed.error.metadata.raw)
+          friendly = inner.error?.message || parsed.error.message || raw
+        } else if (parsed.error?.message) {
+          friendly = parsed.error.message
+        } else if (parsed.error) {
+          friendly = String(parsed.error)
+        }
+      } catch {
+        // not JSON, use raw string
+      }
+      if (friendly.length > 150) {
+        friendly = friendly.slice(0, 150) + '...'
+      }
+      setError(friendly)
       setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id))
     } finally {
       setIsLoading(false)
