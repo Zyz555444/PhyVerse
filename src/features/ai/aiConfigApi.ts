@@ -54,7 +54,9 @@ export async function sendAiChat(payload: {
   stream?: boolean
   temperature?: number
   max_tokens?: number
+  signal?: AbortSignal
 }): Promise<Response> {
+  const { signal, ...body } = payload
   const token = localStorage.getItem('phyverse-token')
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -66,6 +68,7 @@ export async function sendAiChat(payload: {
   return fetch(`${API_BASE}/ai/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
+    signal,
   })
 }
