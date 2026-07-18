@@ -453,6 +453,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     fps: 30,
   },
   isRunning: false,
+  pendingImpulse: null,
 
   addItem: (shape, position, patch) => {
     let newItemId = ''
@@ -657,8 +658,8 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       selectedId: null,
       multiSelectedIds: [],
       gravity: DEFAULT_GRAVITY,
-  isRunning: false,
-  pendingImpulse: null,
+      isRunning: false,
+      pendingImpulse: null,
       history: pushHistory(state),
       telemetry: {
         samples: [],

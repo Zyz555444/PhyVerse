@@ -33,6 +33,7 @@ describe('SceneHierarchyPanel', () => {
         isFullscreen: false,
         isLeftPanelOpen: true,
         isRightPanelOpen: true,
+        isAiPanelOpen: true,
         isHierarchyPanelOpen: true,
         isHelpOpen: false,
       },
