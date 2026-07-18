@@ -80,7 +80,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       const parsed = JSON.parse(raw)
       if (!Array.isArray(parsed)) return []
       return parsed.slice(-MAX_MESSAGES)
-    } catch {
+    } catch (err) {
+      console.warn('[AiAgentPanel] failed to load stored messages, starting fresh:', err)
       return []
     }
   }
@@ -89,16 +90,16 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     try {
       const trimmed = msgs.length > MAX_MESSAGES ? msgs.slice(-MAX_MESSAGES) : msgs
       localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
-    } catch {
-      // localStorage full or unavailable
+    } catch (err) {
+      console.warn('[AiAgentPanel] failed to persist messages (storage full or unavailable):', err)
     }
   }
 
   function clearStoredMessages() {
     try {
       localStorage.removeItem(STORAGE_KEY)
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('[AiAgentPanel] failed to clear stored messages:', err)
     }
   }
 
@@ -121,7 +122,10 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     if (!user) return
     fetchAiConfig()
       .then(({ config: cfg }) => setConfig(cfg))
-      .catch(() => setConfig(null))
+      .catch((err) => {
+        console.debug('[AiAgentPanel] failed to load AI config:', err)
+        setConfig(null)
+      })
   }, [user])
 
   useEffect(() => {
@@ -207,8 +211,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             }
           }
         }
-      } catch {
-        // ignore malformed lines
+      } catch (err) {
+        console.debug('[AiAgentPanel] skipping malformed SSE line:', trimmed, err)
       }
     }
     return { content, toolCalls: Object.values(toolCallsRef.current) }
@@ -222,8 +226,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         let args: Record<string, unknown> = {}
         try {
           args = JSON.parse(call.arguments)
-        } catch {
-          // ignore
+        } catch (err) {
+          console.warn(`[AiAgentPanel] failed to parse arguments for tool "${call.name}":`, err)
         }
         const result = await executeTool(call.name, args, toolContext)
         call.status = result.success ? 'success' : 'error'

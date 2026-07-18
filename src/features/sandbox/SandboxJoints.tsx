@@ -84,7 +84,11 @@ function createJoint(
       default:
         return null
     }
-  } catch {
+  } catch (err) {
+    console.warn(
+      `[SandboxJoints] failed to create "${joint.type}" joint (${joint.id}) between ${joint.bodyA} and ${joint.bodyB}:`,
+      err
+    )
     return null
   }
 }

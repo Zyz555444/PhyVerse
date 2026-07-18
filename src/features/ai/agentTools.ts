@@ -284,8 +284,8 @@ function parseVector(raw: string | unknown[] | undefined, defaultValue: number[]
       if (Array.isArray(parsed) && parsed.every((v) => typeof v === 'number')) {
         return parsed
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.debug('[agentTools] failed to parse vector argument, using default:', raw, err)
     }
   }
   return defaultValue
