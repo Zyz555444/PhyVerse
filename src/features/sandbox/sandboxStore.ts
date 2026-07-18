@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import * as THREE from 'three'
 import type { MaterialPreset } from '@/features/canvas/Materials'
 import { getFriendlyName } from './friendlyName'
 
@@ -212,6 +213,7 @@ interface SandboxState extends SandboxScene {
     patch?: Partial<SandboxItem>
   ) => string
   removeItem: (id: string) => void
+  removeSelected: () => void
   selectItem: (id: string | null, multi?: boolean) => void
   selectItems: (ids: string[], multi?: boolean) => void
   selectAll: () => void
@@ -220,6 +222,7 @@ interface SandboxState extends SandboxScene {
   updateItemAndCommit: (id: string, patch: Partial<SandboxItem>) => void
   commitHistory: () => void
   duplicateItem: (id: string) => void
+  duplicateSelected: () => void
   copyItem: (id: string) => void
   pasteItem: () => void
   setGravity: (gravity: [number, number, number]) => void
@@ -237,8 +240,13 @@ interface SandboxState extends SandboxScene {
   requestImpulse: (itemId: string, impulse: [number, number, number]) => void
   clearPendingImpulse: () => void
   snapToGround: (id: string) => void
+  snapSelectedToGround: () => void
+  alignSelected: (axis: 'x' | 'y' | 'z', mode: 'min' | 'center' | 'max') => void
+  distributeSelected: (axis: 'x' | 'y' | 'z') => void
   toggleLock: (id: string) => void
+  toggleLockForSelection: () => void
   toggleVisibility: (id: string) => void
+  toggleVisibilityForSelection: () => void
   setDisplayName: (id: string, name: string) => void
   requestStep: () => void
   getFriendlyName: (id: string) => string
@@ -483,6 +491,20 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       }
     }),
 
+  removeSelected: () =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const removeSet = new Set(ids)
+      return {
+        items: state.items.filter((item) => !removeSet.has(item.id)),
+        joints: state.joints.filter((j) => !removeSet.has(j.bodyA) && !removeSet.has(j.bodyB)),
+        selectedId: null,
+        multiSelectedIds: [],
+        history: pushHistory(state),
+      }
+    }),
+
   selectItem: (id, multi) =>
     set((state) => {
       if (id === null) return { selectedId: null, multiSelectedIds: [] }
@@ -587,6 +609,35 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       const idsToDup = state.multiSelectedIds.length > 0 ? [id, ...state.multiSelectedIds] : [id]
       const dupSet = new Set(idsToDup)
       const sources = state.items.filter((item) => dupSet.has(item.id))
+      if (sources.length === 0) return state
+      const offset = findFreeOffset(
+        state.items,
+        sources.map((s) => s.position)
+      )
+      const newItems: SandboxItem[] = sources.map((source) => ({
+        ...source,
+        id: generateId(),
+        position: [
+          source.position[0] + offset[0],
+          source.position[1] + offset[1],
+          source.position[2] + offset[2],
+        ] as [number, number, number],
+      }))
+      return {
+        items: [...state.items, ...newItems],
+        selectedId: newItems[0].id,
+        multiSelectedIds: newItems.slice(1).map((p) => p.id),
+        history: pushHistory(state),
+      }
+    }),
+
+  duplicateSelected: () =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const sources = ids
+        .map((id) => state.items.find((item) => item.id === id))
+        .filter(Boolean) as SandboxItem[]
       if (sources.length === 0) return state
       const offset = findFreeOffset(
         state.items,
@@ -803,17 +854,15 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       ui: { ...state.ui, ...patch },
     })),
 
-  requestImpulse: (itemId, impulse) =>
-    set({ pendingImpulse: { itemId, impulse } }),
+  requestImpulse: (itemId, impulse) => set({ pendingImpulse: { itemId, impulse } }),
 
-  clearPendingImpulse: () =>
-    set({ pendingImpulse: null }),
+  clearPendingImpulse: () => set({ pendingImpulse: null }),
 
   snapToGround: (id) =>
     set((state) => {
       const item = state.items.find((it) => it.id === id)
       if (!item) return state
-      const halfHeight = getHalfHeight(item)
+      const halfHeight = getWorldHalfHeight(item)
       const nextPosition: [number, number, number] = [
         item.position[0],
         halfHeight,
@@ -828,17 +877,133 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       }
     }),
 
+  snapSelectedToGround: () =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const changed = ids.map((id) => {
+        const item = state.items.find((it) => it.id === id)
+        if (!item) return null
+        const halfHeight = getWorldHalfHeight(item)
+        return {
+          id,
+          position: [item.position[0], halfHeight, item.position[2]] as [number, number, number],
+        }
+      })
+      const changedMap = new Map<string, [number, number, number]>()
+      changed.forEach((entry) => {
+        if (entry) changedMap.set(entry.id, entry.position)
+      })
+      if (changedMap.size === 0) return state
+      const nextItems = state.items.map((it) =>
+        changedMap.has(it.id) ? { ...it, position: changedMap.get(it.id)! } : it
+      )
+      return {
+        items: nextItems,
+        history: pushHistory(state),
+      }
+    }),
+
+  alignSelected: (axis, mode) =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length < 2) return state
+      const items = ids.map((id) => state.items.find((it) => it.id === id)!).filter(Boolean)
+      const bbbs = items.map((item) => ({ item, aabb: getWorldAABB(item) }))
+      let target: number
+      switch (mode) {
+        case 'min':
+          target = Math.min(...bbbs.map(({ aabb }) => aabb.min[axisIndex(axis)]))
+          break
+        case 'max':
+          target = Math.max(...bbbs.map(({ aabb }) => aabb.max[axisIndex(axis)]))
+          break
+        case 'center':
+        default:
+          target = average(bbbs.map(({ aabb }) => aabb.center[axisIndex(axis)]))
+          break
+      }
+      const nextItems = state.items.map((it) => {
+        const entry = bbbs.find(({ item }) => item.id === it.id)
+        if (!entry) return it
+        const { item, aabb } = entry
+        const idx = axisIndex(axis)
+        let delta
+        if (mode === 'min') delta = target - aabb.min[idx]
+        else if (mode === 'max') delta = target - aabb.max[idx]
+        else delta = target - aabb.center[idx]
+        const nextPosition: [number, number, number] = [...item.position]
+        nextPosition[idx] += delta
+        return { ...it, position: nextPosition }
+      })
+      return {
+        items: nextItems,
+        history: pushHistory(state),
+      }
+    }),
+
+  distributeSelected: (axis) =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length < 2) return state
+      const items = ids.map((id) => state.items.find((it) => it.id === id)!).filter(Boolean)
+      const idx = axisIndex(axis)
+      const entries = items.map((item) => ({ item, aabb: getWorldAABB(item) }))
+      const sorted = [...entries].sort((a, b) => a.aabb.center[idx] - b.aabb.center[idx])
+      const min = Math.min(...entries.map(({ aabb }) => aabb.center[idx]))
+      const max = Math.max(...entries.map(({ aabb }) => aabb.center[idx]))
+      const count = sorted.length
+      const nextItems = state.items.map((it) => {
+        const index = sorted.findIndex(({ item }) => item.id === it.id)
+        if (index < 0) return it
+        const delta = min + ((max - min) * index) / (count - 1) - it.position[idx]
+        const nextPosition: [number, number, number] = [...it.position]
+        nextPosition[idx] += delta
+        return { ...it, position: nextPosition }
+      })
+      return {
+        items: nextItems,
+        history: pushHistory(state),
+      }
+    }),
+
   toggleLock: (id) =>
     set((state) => ({
       items: state.items.map((it) => (it.id === id ? { ...it, locked: !it.locked } : it)),
       history: pushHistory(state),
     })),
 
+  toggleLockForSelection: () =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const targetLocked = ids.some((id) => !state.items.find((it) => it.id === id)?.locked)
+      return {
+        items: state.items.map((it) =>
+          ids.includes(it.id) ? { ...it, locked: targetLocked } : it
+        ),
+        history: pushHistory(state),
+      }
+    }),
+
   toggleVisibility: (id) =>
     set((state) => ({
       items: state.items.map((it) => (it.id === id ? { ...it, hidden: !it.hidden } : it)),
       history: pushHistory(state),
     })),
+
+  toggleVisibilityForSelection: () =>
+    set((state) => {
+      const ids = [state.selectedId, ...state.multiSelectedIds].filter(Boolean) as string[]
+      if (ids.length === 0) return state
+      const targetHidden = ids.some((id) => !state.items.find((it) => it.id === id)?.hidden)
+      return {
+        items: state.items.map((it) =>
+          ids.includes(it.id) ? { ...it, hidden: targetHidden } : it
+        ),
+        history: pushHistory(state),
+      }
+    }),
 
   setDisplayName: (id, name) =>
     set((state) => ({
@@ -1054,23 +1219,65 @@ function findFreeOffset(
   return [step, 0, step]
 }
 
-function getHalfHeight(item: SandboxItem): number {
-  const [, sy] = item.scale
-  const [, sizeY] = item.size
+function axisIndex(axis: 'x' | 'y' | 'z'): number {
+  return axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+}
+
+function average(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0) / values.length
+}
+
+function getLocalHalfExtents(item: SandboxItem): [number, number, number] {
+  const [sx, sy, sz] = item.scale
+  const [sizeX, sizeY, sizeZ] = item.size
   switch (item.shape) {
     case 'sphere':
-      return item.size[0] * item.scale[0]
+      return [sizeX * sx, sizeX * sx, sizeX * sx]
     case 'cylinder':
-    case 'capsule':
     case 'cone':
     case 'spring':
-    case 'box':
-      return (sizeY * sy) / 2
+      return [sizeX * sx, (sizeY * sy) / 2, sizeX * sx]
+    case 'capsule':
+      return [sizeX * sx, (sizeY * sy) / 2 + sizeX * sx, sizeX * sx]
     case 'torus':
-      return item.size[1] * item.scale[1]
+      return [sizeX * sx, sizeY * sy, sizeY * sy]
     case 'plane':
-      return 0.01
+      return [(sizeX * sx) / 2, (sizeY * sy) / 2, (sizeZ * sz) / 2]
     default:
-      return 0.1
+      return [(sizeX * sx) / 2, (sizeY * sy) / 2, (sizeZ * sz) / 2]
   }
+}
+
+function getWorldAABB(item: SandboxItem): {
+  min: [number, number, number]
+  max: [number, number, number]
+  center: [number, number, number]
+} {
+  const [hx, hy, hz] = getLocalHalfExtents(item)
+  const euler = new THREE.Euler(...item.rotation, 'XYZ')
+  let maxAbsX = 0
+  let maxAbsY = 0
+  let maxAbsZ = 0
+  const signs = [-1, 1]
+  for (const sx of signs) {
+    for (const sy of signs) {
+      for (const sz of signs) {
+        const v = new THREE.Vector3(hx * sx, hy * sy, hz * sz).applyEuler(euler)
+        maxAbsX = Math.max(maxAbsX, Math.abs(v.x))
+        maxAbsY = Math.max(maxAbsY, Math.abs(v.y))
+        maxAbsZ = Math.max(maxAbsZ, Math.abs(v.z))
+      }
+    }
+  }
+  const [cx, cy, cz] = item.position
+  return {
+    min: [cx - maxAbsX, cy - maxAbsY, cz - maxAbsZ],
+    max: [cx + maxAbsX, cy + maxAbsY, cz + maxAbsZ],
+    center: [cx, cy, cz],
+  }
+}
+
+function getWorldHalfHeight(item: SandboxItem): number {
+  const aabb = getWorldAABB(item)
+  return aabb.center[1] - aabb.min[1]
 }

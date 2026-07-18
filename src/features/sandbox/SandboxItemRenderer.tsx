@@ -483,7 +483,9 @@ export function SandboxItemRenderer({
   const material = useMemo(
     () =>
       createMaterial(item.material as MaterialPreset, {
-        color: selected ? SELECTION_COLOR : multiSelected ? '#fbbf24' : item.color,
+        color: item.color,
+        highlight: selected || multiSelected,
+        highlightColor: selected ? SELECTION_COLOR : '#fbbf24',
       }),
     [item.material, item.color, selected, multiSelected]
   )

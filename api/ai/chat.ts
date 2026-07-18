@@ -71,9 +71,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     } catch (decryptErr) {
       console.error('[ai/chat] step=decryptFailed error=%s', (decryptErr as Error).message)
       if (decryptErr instanceof KeyVersionMismatchError) {
-        res.status(500).json({ error: 'Encryption key has changed. Please reconfigure your AI provider in settings.' })
+        res.status(500).json({
+          error: 'Encryption key has changed. Please reconfigure your AI provider in settings.',
+        })
       } else {
-        res.status(500).json({ error: 'Failed to decrypt API key. Please reconfigure your AI provider in settings.' })
+        res.status(500).json({
+          error: 'Failed to decrypt API key. Please reconfigure your AI provider in settings.',
+        })
       }
       return
     }
@@ -94,8 +98,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       requestBody.max_tokens = max_tokens
     }
 
-    console.log('[ai/chat] step=callUpstream endpoint=%s model=%s stream=%s',
-      config.endpoint, config.model, actuallyStreaming)
+    console.log(
+      '[ai/chat] step=callUpstream endpoint=%s model=%s stream=%s',
+      config.endpoint,
+      config.model,
+      actuallyStreaming
+    )
     let upstreamResponse = await fetch(config.endpoint, {
       method: 'POST',
       headers: {
@@ -107,8 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (!upstreamResponse.ok && requestBody.tools && actuallyStreaming) {
       const errorText = await upstreamResponse.text()
-      const isJsonError =
-        errorText.includes('Invalid JSON') || errorText.includes('tool call')
+      const isJsonError = errorText.includes('Invalid JSON') || errorText.includes('tool call')
       if (isJsonError) {
         console.log('[ai/chat] step=retryNonStreaming reason=%s', errorText.slice(0, 200))
         actuallyStreaming = false
@@ -122,8 +129,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
           body: JSON.stringify(requestBody),
         })
       } else {
-        console.error('[ai/chat] step=upstreamError status=%d body=%s',
-          upstreamResponse.status, errorText.slice(0, 500))
+        console.error(
+          '[ai/chat] step=upstreamError status=%d body=%s',
+          upstreamResponse.status,
+          errorText.slice(0, 500)
+        )
         res.status(upstreamResponse.status).json({ error: errorText || 'AI request failed' })
         return
       }
@@ -131,8 +141,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (!upstreamResponse.ok) {
       const errorText = await upstreamResponse.text()
-      console.error('[ai/chat] step=upstreamError status=%d body=%s',
-        upstreamResponse.status, errorText.slice(0, 500))
+      console.error(
+        '[ai/chat] step=upstreamError status=%d body=%s',
+        upstreamResponse.status,
+        errorText.slice(0, 500)
+      )
       res.status(upstreamResponse.status).json({ error: errorText || 'AI request failed' })
       return
     }
@@ -147,14 +160,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         const message = data.choices?.[0]?.message
         if (message) {
           if (message.content) {
-            res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: message.content } }] })}\n\n`)
+            res.write(
+              `data: ${JSON.stringify({ choices: [{ delta: { content: message.content } }] })}\n\n`
+            )
           }
           if (message.tool_calls) {
             for (let i = 0; i < message.tool_calls.length; i++) {
               const tc = message.tool_calls[i]
-              res.write(`data: ${JSON.stringify({
-                choices: [{ delta: { tool_calls: [{ index: i, id: tc.id, function: { name: tc.function.name, arguments: tc.function.arguments } }] } }]
-              })}\n\n`)
+              res.write(
+                `data: ${JSON.stringify({
+                  choices: [
+                    {
+                      delta: {
+                        tool_calls: [
+                          {
+                            index: i,
+                            id: tc.id,
+                            function: { name: tc.function.name, arguments: tc.function.arguments },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                })}\n\n`
+              )
             }
           }
         }
@@ -184,8 +213,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     res.end()
   } catch (error) {
-    console.error('[ai/chat] step=catch error=%s stack=%s',
-      (error as Error).message, (error as Error).stack?.slice(0, 500))
+    console.error(
+      '[ai/chat] step=catch error=%s stack=%s',
+      (error as Error).message,
+      (error as Error).stack?.slice(0, 500)
+    )
     res.status(500).json({ error: 'Internal server error' })
   }
 }

@@ -98,7 +98,9 @@ export async function aesEncrypt(plainText: string): Promise<EncryptedKeyBundle>
 
 export class KeyVersionMismatchError extends Error {
   constructor(storedVersion: number, currentVersion: number) {
-    super(`AES key version mismatch: data was encrypted with v${storedVersion}, current key is v${currentVersion}`)
+    super(
+      `AES key version mismatch: data was encrypted with v${storedVersion}, current key is v${currentVersion}`
+    )
     this.name = 'KeyVersionMismatchError'
   }
 }
