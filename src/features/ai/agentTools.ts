@@ -4,7 +4,7 @@ export interface AgentToolParameter {
   type: string
   description: string
   enum?: string[]
-  items?: AgentToolParameter
+  items?: Partial<AgentToolParameter>
 }
 
 export interface AgentTool {
