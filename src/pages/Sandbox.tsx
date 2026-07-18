@@ -6,7 +6,6 @@ import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { useIsMobile } from '@/shared/hooks/useIsMobile'
 import { MobileBottomSheet } from '@/shared/ui/MobileBottomSheet'
 import { Scene } from '@/features/canvas/Scene'
-import { LabTable } from '@/features/canvas/LabTable'
 import { PhysicsProvider } from '@/features/physics/PhysicsProvider'
 import { usePhysics } from '@/features/physics/usePhysics'
 import {
@@ -22,6 +21,7 @@ import { SandboxItemRenderer } from '@/features/sandbox/SandboxItemRenderer'
 import { SandboxJoints } from '@/features/sandbox/SandboxJoints'
 import { BoxSelection } from '@/features/sandbox/BoxSelection'
 import { MultiSelectionGizmo } from '@/features/sandbox/MultiSelectionGizmo'
+import { SceneContextMenu } from '@/features/sandbox/SceneContextMenu'
 import { SceneHierarchyPanel } from '@/features/sandbox/SceneHierarchyPanel'
 import { HelpOverlay } from '@/features/sandbox/HelpOverlay'
 import { DataPanel } from '@/features/sandbox/DataPanel'
@@ -85,6 +85,8 @@ import {
   Sparkles,
   Box as BoxIcon,
   Eye,
+  EyeOff,
+  Lock,
   BarChart3,
   Cloud,
   Menu,
@@ -307,6 +309,7 @@ export function Sandbox() {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [sceneMenuOpen, setSceneMenuOpen] = useState(false)
   const sceneMenuRef = useRef<HTMLDivElement>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [recipeState, setRecipeState] = useState<{
     activeRecipeId: string | null
     currentStepIndex: number
@@ -586,6 +589,16 @@ export function Sandbox() {
     if (!selectedId) return ''
     return getFriendlyName(items, selectedId)
   }, [items, selectedId])
+
+  const selectedCount = [selectedId, ...multiSelectedIds].filter(Boolean).length
+  const selectedLockedCount = useMemo(() => {
+    const ids = [selectedId, ...multiSelectedIds].filter(Boolean) as string[]
+    return ids.filter((id) => items.find((it) => it.id === id)?.locked).length
+  }, [items, selectedId, multiSelectedIds])
+  const selectedHiddenCount = useMemo(() => {
+    const ids = [selectedId, ...multiSelectedIds].filter(Boolean) as string[]
+    return ids.filter((id) => items.find((it) => it.id === id)?.hidden).length
+  }, [items, selectedId, multiSelectedIds])
 
   const focusTarget = useMemo<[number, number, number] | undefined>(() => {
     if (!selectedId) return undefined
@@ -1021,9 +1034,23 @@ export function Sandbox() {
               {joints.length} {t('sandbox.joints')}
             </span>
           )}
-          {selectedId && (
+          {selectedCount > 0 && (
             <span className="rounded bg-accent-soft px-1.5 py-0.5 text-accent">
-              {t('sandbox.selected')}: {friendlyName}
+              {selectedCount === 1
+                ? `${t('sandbox.selected')}: ${friendlyName}`
+                : `${selectedCount} ${t('sandbox.selected')}`}
+            </span>
+          )}
+          {selectedLockedCount > 0 && (
+            <span className="flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
+              <Lock className="h-3 w-3" />
+              {selectedLockedCount}
+            </span>
+          )}
+          {selectedHiddenCount > 0 && (
+            <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-600">
+              <EyeOff className="h-3 w-3" />
+              {selectedHiddenCount}
             </span>
           )}
           <span className="ml-auto font-mono">FPS: {fps}</span>
@@ -1088,6 +1115,10 @@ export function Sandbox() {
           <div
             className="relative flex-1 overflow-hidden rounded-xl border border-border bg-paper-tertiary"
             data-sandbox-canvas
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setContextMenu({ x: e.clientX, y: e.clientY })
+            }}
           >
             <Scene
               cameraPosition={[10, 8, 10]}
@@ -1096,6 +1127,7 @@ export function Sandbox() {
               focusTarget={focusTarget}
               focusKey={cameraFocusKey}
               showGrid
+              environment
             >
               <PhysicsProvider
                 config={physicsConfig}
@@ -1113,7 +1145,6 @@ export function Sandbox() {
                 <MeasurementOverlay isRunning={isRunning} />
                 <MeasurementDataCollector />
                 <BoxSelection />
-                <LabTable position={[0, 0, 0]} size={[10, 8]} height={0.8} />
                 <SandboxJoints />
                 {items.map((item) => (
                   <SandboxItemRenderer
@@ -1162,6 +1193,14 @@ export function Sandbox() {
                 />
               </PhysicsProvider>
             </Scene>
+
+            {contextMenu && (
+              <SceneContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={() => setContextMenu(null)}
+              />
+            )}
 
             {saved && !isMobile && (
               <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-paper/95 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm">

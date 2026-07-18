@@ -3,6 +3,7 @@ import { Suspense, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { Lighting } from './Lighting'
 import { Grid } from './Grid'
+import { LabEnvironment } from './LabEnvironment'
 import { CameraController } from './Controls'
 
 export interface SceneProps {
@@ -17,6 +18,8 @@ export interface SceneProps {
   focusTarget?: [number, number, number]
   /** Increment to force a re-focus even if focusTarget is unchanged. */
   focusKey?: number
+  /** Render the default lab environment (floor + table). */
+  environment?: boolean
 }
 
 export function Scene({
@@ -28,6 +31,7 @@ export function Scene({
   cameraResetKey,
   focusTarget,
   focusKey,
+  environment = false,
 }: SceneProps) {
   return (
     <Canvas
@@ -45,12 +49,13 @@ export function Scene({
       }}
       dpr={[1, 2]}
     >
-      <color attach="background" args={['#f0f0ea']} />
-      <fog attach="fog" args={['#f0f0ea', 20, 60]} />
+      <color attach="background" args={['#e8e8e2']} />
+      <fog attach="fog" args={['#e8e8e2', 25, 75]} />
 
       <Suspense fallback={null}>
         <Lighting />
         {showGrid && <Grid />}
+        {environment && <LabEnvironment />}
         <CameraController
           key={cameraResetKey}
           view={cameraView}

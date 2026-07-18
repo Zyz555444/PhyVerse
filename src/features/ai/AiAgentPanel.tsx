@@ -166,7 +166,6 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       selectItem,
       setGravity,
       requestImpulse,
-      t,
     ]
   )
 
@@ -324,9 +323,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
         console.error('Follow-up error:', raw)
-        setError(raw.includes('Invalid JSON')
-          ? 'AI 生成格式出错，请重试'
-          : raw.slice(0, 120))
+        setError(raw.includes('Invalid JSON') ? 'AI 生成格式出错，请重试' : raw.slice(0, 120))
       }
     },
     [config]
@@ -710,11 +707,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
               <Square className="h-4 w-4" />
             </Button>
           ) : (
-            <Button
-              disabled={!input.trim() || !config}
-              onClick={handleSend}
-              className="px-3"
-            >
+            <Button disabled={!input.trim() || !config} onClick={handleSend} className="px-3">
               <Send className="h-4 w-4" />
             </Button>
           )}

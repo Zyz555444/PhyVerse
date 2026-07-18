@@ -9,6 +9,7 @@ import {
   Eye,
   EyeOff,
   ArrowDownToLine,
+  ChevronDown,
 } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Slider } from '@/shared/ui/Slider'
@@ -567,9 +568,19 @@ function SelectedItemProperties({
   onSnapToGround,
 }: SelectedItemPropertiesProps) {
   const { t } = useI18n()
+  const [open, setOpen] = useState<Record<string, boolean>>({
+    transform: true,
+    physics: true,
+    appearance: true,
+    actions: true,
+  })
+
+  const toggleSection = (section: string) => {
+    setOpen((prev) => ({ ...prev, [section]: !prev[section] }))
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span
           className="max-w-[60%] truncate rounded bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent"
@@ -626,53 +637,61 @@ function SelectedItemProperties({
         )}
       </div>
 
-      <Vector3Group
-        label={t('sandbox.position')}
-        values={item.position}
-        min={-10}
-        max={10}
-        step={0.1}
-        disabled={item.locked}
-        onChange={(v) => onChange({ position: v })}
-        onCommit={(v) => onCommit({ position: v })}
-      />
+      <CollapsibleSection
+        title={t('sandbox.transform')}
+        open={open.transform}
+        onToggle={() => toggleSection('transform')}
+      >
+        <div className="space-y-4">
+          <Vector3Group
+            label={t('sandbox.position')}
+            values={item.position}
+            min={-10}
+            max={10}
+            step={0.1}
+            disabled={item.locked}
+            onChange={(v) => onChange({ position: v })}
+            onCommit={(v) => onCommit({ position: v })}
+          />
+          <Vector3Group
+            label={t('sandbox.rotation')}
+            values={item.rotation}
+            min={-Math.PI}
+            max={Math.PI}
+            step={0.05}
+            valueFormatter={(v) => `${v.toFixed(2)} rad`}
+            disabled={item.locked}
+            onChange={(v) => onChange({ rotation: v })}
+            onCommit={(v) => onCommit({ rotation: v })}
+          />
+          <Vector3Group
+            label={t('sandbox.scale')}
+            values={item.scale}
+            min={0.1}
+            max={3}
+            step={0.1}
+            disabled={item.locked}
+            onChange={(v) => onChange({ scale: v })}
+            onCommit={(v) => onCommit({ scale: v })}
+          />
+          <Vector3Group
+            label={t('sandbox.size')}
+            values={item.size}
+            min={0.05}
+            max={5}
+            step={0.05}
+            disabled={item.locked}
+            onChange={(v) => onChange({ size: v })}
+            onCommit={(v) => onCommit({ size: v })}
+          />
+        </div>
+      </CollapsibleSection>
 
-      <Vector3Group
-        label={t('sandbox.rotation')}
-        values={item.rotation}
-        min={-Math.PI}
-        max={Math.PI}
-        step={0.05}
-        valueFormatter={(v) => `${v.toFixed(2)} rad`}
-        disabled={item.locked}
-        onChange={(v) => onChange({ rotation: v })}
-        onCommit={(v) => onCommit({ rotation: v })}
-      />
-
-      <Vector3Group
-        label={t('sandbox.scale')}
-        values={item.scale}
-        min={0.1}
-        max={3}
-        step={0.1}
-        disabled={item.locked}
-        onChange={(v) => onChange({ scale: v })}
-        onCommit={(v) => onCommit({ scale: v })}
-      />
-
-      <Vector3Group
-        label={t('sandbox.size')}
-        values={item.size}
-        min={0.05}
-        max={5}
-        step={0.05}
-        disabled={item.locked}
-        onChange={(v) => onChange({ size: v })}
-        onCommit={(v) => onCommit({ size: v })}
-      />
-
-      <section>
-        <h4 className="mb-2 text-xs font-medium text-text-secondary">{t('sandbox.physics')}</h4>
+      <CollapsibleSection
+        title={t('sandbox.physics')}
+        open={open.physics}
+        onToggle={() => toggleSection('physics')}
+      >
         <div className="space-y-3">
           <Slider
             label={t('sandbox.mass')}
@@ -705,83 +724,130 @@ function SelectedItemProperties({
             valueFormatter={(v) => v.toFixed(2)}
           />
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <div>
-        <h4 className="mb-2 text-xs font-medium text-text-secondary">{t('sandbox.material')}</h4>
-        <div className="grid grid-cols-3 gap-1.5">
-          {MATERIALS.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => onCommit({ material: m })}
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors',
-                item.material === m
-                  ? 'border-accent bg-accent-soft text-accent'
-                  : 'border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary'
-              )}
-            >
-              {m}
-            </button>
-          ))}
+      <CollapsibleSection
+        title={t('sandbox.appearance')}
+        open={open.appearance}
+        onToggle={() => toggleSection('appearance')}
+      >
+        <div className="space-y-4">
+          <div>
+            <h4 className="mb-2 text-xs font-medium text-text-secondary">
+              {t('sandbox.material')}
+            </h4>
+            <div className="grid grid-cols-3 gap-1.5">
+              {MATERIALS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => onCommit({ material: m })}
+                  className={cn(
+                    'rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors',
+                    item.material === m
+                      ? 'border-accent bg-accent-soft text-accent'
+                      : 'border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary'
+                  )}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-xs font-medium text-text-secondary">{t('sandbox.color')}</h4>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={item.color}
+                onChange={(e) => onChange({ color: e.target.value })}
+                onBlur={() => onCommit({ color: item.color })}
+                className="h-8 w-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+              />
+              <span className="font-mono text-xs text-text-tertiary">{item.color}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              id="dynamic-toggle"
+              type="checkbox"
+              checked={item.isDynamic}
+              onChange={(e) => onCommit({ isDynamic: e.target.checked })}
+              className="h-4 w-4 rounded border-border text-accent focus:ring-accent-soft"
+            />
+            <label htmlFor="dynamic-toggle" className="text-sm text-text-primary">
+              {t('sandbox.dynamic')}
+            </label>
+          </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div>
-        <h4 className="mb-2 text-xs font-medium text-text-secondary">{t('sandbox.color')}</h4>
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={item.color}
-            onChange={(e) => onChange({ color: e.target.value })}
-            onBlur={() => onCommit({ color: item.color })}
-            className="h-8 w-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
-          />
-          <span className="font-mono text-xs text-text-tertiary">{item.color}</span>
+      <CollapsibleSection
+        title={t('sandbox.titleActions')}
+        open={open.actions}
+        onToggle={() => toggleSection('actions')}
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDuplicate}
+            leftIcon={<Copy className="h-4 w-4" />}
+          >
+            {t('sandbox.duplicate')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSnapToGround}
+            leftIcon={<ArrowDownToLine className="h-4 w-4" />}
+            title={t('sandbox.snapToGround')}
+          >
+            {t('sandbox.snapToGround')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRemove}
+            leftIcon={<Trash2 className="h-4 w-4" />}
+          >
+            {t('sandbox.delete')}
+          </Button>
         </div>
-      </div>
+      </CollapsibleSection>
+    </div>
+  )
+}
 
-      <div className="flex items-center gap-2">
-        <input
-          id="dynamic-toggle"
-          type="checkbox"
-          checked={item.isDynamic}
-          onChange={(e) => onCommit({ isDynamic: e.target.checked })}
-          className="h-4 w-4 rounded border-border text-accent focus:ring-accent-soft"
+function CollapsibleSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-paper p-2.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between text-xs font-medium text-text-secondary hover:text-text-primary"
+      >
+        {title}
+        <ChevronDown
+          className={cn(
+            'h-3.5 w-3.5 text-text-tertiary transition-transform',
+            open ? 'rotate-180' : 'rotate-0'
+          )}
         />
-        <label htmlFor="dynamic-toggle" className="text-sm text-text-primary">
-          {t('sandbox.dynamic')}
-        </label>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onDuplicate}
-          leftIcon={<Copy className="h-4 w-4" />}
-        >
-          {t('sandbox.duplicate')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onSnapToGround}
-          leftIcon={<ArrowDownToLine className="h-4 w-4" />}
-          title={t('sandbox.snapToGround')}
-        >
-          {t('sandbox.snapToGround')}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRemove}
-          leftIcon={<Trash2 className="h-4 w-4" />}
-        >
-          {t('sandbox.delete')}
-        </Button>
-      </div>
+      </button>
+      {open && <div className="mt-2">{children}</div>}
     </div>
   )
 }

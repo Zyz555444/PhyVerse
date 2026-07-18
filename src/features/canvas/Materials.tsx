@@ -11,6 +11,9 @@ export interface MaterialOptions {
   clearcoat?: number
   transmission?: number
   ior?: number
+  /** Highlight the material (e.g. when selected) without discarding its base color. */
+  highlight?: boolean
+  highlightColor?: string
 }
 
 export function createMaterial(
@@ -19,23 +22,27 @@ export function createMaterial(
 ): THREE.Material {
   const color = options.color ?? '#ffffff'
 
+  let material: THREE.Material
+
   switch (preset) {
     case 'metal':
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
         roughness: options.roughness ?? 0.3,
         metalness: options.metalness ?? 0.9,
       })
+      break
 
     case 'plastic':
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
-        roughness: options.roughness ?? 0.5,
+        roughness: options.roughness ?? 0.45,
         metalness: options.metalness ?? 0.0,
       })
+      break
 
     case 'glass':
-      return new THREE.MeshPhysicalMaterial({
+      material = new THREE.MeshPhysicalMaterial({
         color,
         roughness: options.roughness ?? 0.05,
         metalness: 0.0,
@@ -47,36 +54,47 @@ export function createMaterial(
         clearcoat: options.clearcoat ?? 1.0,
         clearcoatRoughness: 0.05,
       })
+      break
 
     case 'wood':
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
-        roughness: options.roughness ?? 0.8,
+        roughness: options.roughness ?? 0.75,
         metalness: 0.0,
       })
+      break
 
     case 'rubber':
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
-        roughness: options.roughness ?? 0.9,
+        roughness: options.roughness ?? 0.85,
         metalness: 0.0,
       })
+      break
 
     case 'paper':
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
         roughness: options.roughness ?? 0.95,
         metalness: 0.0,
         side: THREE.DoubleSide,
       })
+      break
 
     default:
-      return new THREE.MeshStandardMaterial({
+      material = new THREE.MeshStandardMaterial({
         color,
         roughness: 0.5,
         metalness: 0.0,
       })
   }
+
+  if (options.highlight && material instanceof THREE.MeshStandardMaterial) {
+    material.emissive = new THREE.Color(options.highlightColor ?? '#f59e0b')
+    material.emissiveIntensity = 0.35
+  }
+
+  return material
 }
 
 export const materialPresets: Record<MaterialPreset, MaterialOptions> = {
