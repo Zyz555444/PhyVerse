@@ -1,4 +1,5 @@
 import { registerExperiment } from '../registry'
+import { magnitude } from '@/shared/utils/vectorMath'
 import type { ExperimentDefinition } from '@/shared/types/experiment'
 
 interface EnergyData {
@@ -101,8 +102,7 @@ const energyConservationExperiment: ExperimentDefinition = {
       collect: (world) => {
         const ball = world.getBody('ball')
         if (!ball) return 0
-        const v = ball.rigidBody.linvel()
-        return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        return magnitude(ball.rigidBody.linvel())
       },
     },
     {
@@ -113,8 +113,7 @@ const energyConservationExperiment: ExperimentDefinition = {
         const ball = world.getBody('ball')
         if (!ball) return 0
         const data = ball.rigidBody.userData as EnergyData
-        const v = ball.rigidBody.linvel()
-        const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        const speed = magnitude(ball.rigidBody.linvel())
         return 0.5 * data.mass * speed * speed
       },
     },
@@ -138,8 +137,7 @@ const energyConservationExperiment: ExperimentDefinition = {
         const ball = world.getBody('ball')
         if (!ball) return 0
         const data = ball.rigidBody.userData as EnergyData
-        const v = ball.rigidBody.linvel()
-        const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        const speed = magnitude(ball.rigidBody.linvel())
         const h = ball.rigidBody.translation().y
         const ek = 0.5 * data.mass * speed * speed
         const ep = data.mass * 9.81 * h

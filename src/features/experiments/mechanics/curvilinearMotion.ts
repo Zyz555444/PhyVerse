@@ -1,5 +1,6 @@
 import { registerExperiment } from '../registry'
 import { createJoint } from '@/features/physics/JointFactory'
+import { magnitude, magnitudeXZ, distanceXZ } from '@/shared/utils/vectorMath'
 import type { ExperimentDefinition } from '@/shared/types/experiment'
 
 const curvilinearMotionExperiment: ExperimentDefinition = {
@@ -112,8 +113,7 @@ const curvilinearMotionExperiment: ExperimentDefinition = {
       collect: (world) => {
         const ball = world.getBody('ball')
         if (!ball) return 0
-        const v = ball.rigidBody.linvel()
-        return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        return magnitude(ball.rigidBody.linvel())
       },
     },
     {
@@ -124,11 +124,7 @@ const curvilinearMotionExperiment: ExperimentDefinition = {
         const pivot = world.getBody('pivot')
         const ball = world.getBody('ball')
         if (!pivot || !ball) return 0
-        const pp = pivot.rigidBody.translation()
-        const bp = ball.rigidBody.translation()
-        const dx = bp.x - pp.x
-        const dz = bp.z - pp.z
-        return Math.sqrt(dx * dx + dz * dz)
+        return distanceXZ(ball.rigidBody.translation(), pivot.rigidBody.translation())
       },
     },
     {
@@ -145,8 +141,8 @@ const curvilinearMotionExperiment: ExperimentDefinition = {
         const rx = bp.x - pp.x
         const rz = bp.z - pp.z
         const dot = rx * v.x + rz * v.z
-        const rMag = Math.sqrt(rx * rx + rz * rz)
-        const vMag = Math.sqrt(v.x * v.x + v.z * v.z)
+        const rMag = magnitudeXZ({ x: rx, z: rz })
+        const vMag = magnitudeXZ(v)
         if (rMag < 0.01 || vMag < 0.01) return 0
         const cosAngle = dot / (rMag * vMag)
         const clamped = Math.max(-1, Math.min(1, cosAngle))

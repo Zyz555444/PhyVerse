@@ -1,4 +1,5 @@
 import { registerExperiment } from '../registry'
+import { magnitude } from '@/shared/utils/vectorMath'
 import type { ExperimentDefinition } from '@/shared/types/experiment'
 
 const galileoInclineExperiment: ExperimentDefinition = {
@@ -151,8 +152,7 @@ const galileoInclineExperiment: ExperimentDefinition = {
       collect: (world) => {
         const ball = world.getBody('ball')
         if (!ball) return 0
-        const v = ball.rigidBody.linvel()
-        return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        return magnitude(ball.rigidBody.linvel())
       },
     },
     {
