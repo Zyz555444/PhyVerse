@@ -82,6 +82,7 @@ import {
   Zap,
   HelpCircle,
   Route,
+  Sparkles,
   Box as BoxIcon,
   Eye,
   BarChart3,
@@ -114,6 +115,25 @@ function ManualStepper() {
       }
     }
   })
+  return null
+}
+
+/** Applies pending impulse requests from the store to physics bodies. */
+function ImpulseApplier() {
+  const { world } = usePhysics()
+  const pendingImpulse = useSandboxStore((s) => s.pendingImpulse)
+  const clearPendingImpulse = useSandboxStore((s) => s.clearPendingImpulse)
+
+  useFrame(() => {
+    if (!pendingImpulse || !world?.isReady) return
+    const record = world.getBody(pendingImpulse.itemId)
+    if (record) {
+      const [x, y, z] = pendingImpulse.impulse
+      record.rigidBody.applyImpulse({ x, y, z }, true)
+    }
+    clearPendingImpulse()
+  })
+
   return null
 }
 
@@ -282,7 +302,7 @@ export function Sandbox() {
   const [cameraFocusKey, setCameraFocusKey] = useState(0)
   const [showPresetMenu, setShowPresetMenu] = useState(false)
   const [leftTab, setLeftTab] = useState<'equipment' | 'tasks' | 'recipes'>('equipment')
-  const [rightTab, setRightTab] = useState<'hierarchy' | 'properties' | 'ai'>('properties')
+  const [centerTab, setCenterTab] = useState<'hierarchy' | 'properties'>('properties')
   const [cloudOpen, setCloudOpen] = useState(false)
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [sceneMenuOpen, setSceneMenuOpen] = useState(false)
@@ -578,7 +598,8 @@ export function Sandbox() {
   const isFullscreen = ui.isFullscreen
   const isMobile = useIsMobile()
   const leftOpen = !isMobile && ui.isLeftPanelOpen
-  const rightOpen = !isMobile && ui.isRightPanelOpen
+  const centerOpen = !isMobile && ui.isRightPanelOpen
+  const aiOpen = !isMobile && ui.isAiPanelOpen
   const [mobileSheet, setMobileSheet] = useState<
     'equipment' | 'tasks' | 'hierarchy' | 'properties' | null
   >(null)
@@ -587,7 +608,7 @@ export function Sandbox() {
     if (isFullscreen) {
       return 'fixed inset-0 z-50 flex flex-col bg-paper p-2'
     }
-    return isMobile ? 'flex flex-col py-2' : 'flex flex-col py-4'
+    return isMobile ? 'flex flex-col' : 'flex flex-col min-h-0 flex-1'
   }, [isFullscreen, isMobile])
 
   return (
@@ -966,9 +987,15 @@ export function Sandbox() {
                 title={leftOpen ? t('sandbox.hidePalette') : t('sandbox.showPalette')}
               />
               <ToolButton
-                icon={rightOpen ? PanelRightClose : PanelRightOpen}
-                onClick={() => setUI({ isRightPanelOpen: !rightOpen })}
-                title={rightOpen ? t('sandbox.hideProperties') : t('sandbox.showProperties')}
+                icon={centerOpen ? PanelRightClose : PanelRightOpen}
+                onClick={() => setUI({ isRightPanelOpen: !centerOpen })}
+                title={centerOpen ? t('sandbox.hideProperties') : t('sandbox.showProperties')}
+              />
+              <ToolButton
+                icon={Sparkles}
+                onClick={() => setUI({ isAiPanelOpen: !aiOpen })}
+                title={aiOpen ? t('ai.agent.hide') : t('ai.agent.show')}
+                active={aiOpen}
               />
             </>
           )}
@@ -1076,6 +1103,7 @@ export function Sandbox() {
                 timeScale={editorConfig.timeScale}
               >
                 {!isRunning && <ManualStepper />}
+                <ImpulseApplier />
                 <TelemetrySampler isRunning={isRunning} />
                 <RecorderSampler isRunning={isRunning} />
                 <PlaybackRunner />
@@ -1220,23 +1248,22 @@ export function Sandbox() {
             )}
           </div>
 
-          {rightOpen && !isFullscreen && (
-            <div className="flex w-72 flex-shrink-0 flex-col gap-2">
+          {centerOpen && !isFullscreen && (
+            <div className="flex w-64 flex-shrink-0 flex-col gap-2">
               <div className="flex rounded-lg border border-border bg-paper p-0.5">
                 {(
                   [
                     ['hierarchy', 'sandbox.hierarchy'],
                     ['properties', 'sandbox.properties'],
-                    ['ai', 'ai.agent.title'],
                   ] as const
                 ).map(([tab, labelKey]) => (
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setRightTab(tab)}
+                    onClick={() => setCenterTab(tab)}
                     className={cn(
                       'flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                      rightTab === tab
+                      centerTab === tab
                         ? 'bg-accent-soft text-accent'
                         : 'text-text-secondary hover:text-text-primary'
                     )}
@@ -1246,12 +1273,15 @@ export function Sandbox() {
                 ))}
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
-                {rightTab === 'hierarchy' && <SceneHierarchyPanel />}
-                {rightTab === 'properties' && <PropertiesPanel />}
-                {rightTab === 'ai' && (
-                  <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
-                )}
+                {centerTab === 'hierarchy' && <SceneHierarchyPanel />}
+                {centerTab === 'properties' && <PropertiesPanel />}
               </div>
+            </div>
+          )}
+
+          {aiOpen && !isFullscreen && (
+            <div className="flex w-80 flex-shrink-0 flex-col">
+              <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
             </div>
           )}
         </div>

@@ -177,6 +177,7 @@ interface SandboxUIState {
   isFullscreen: boolean
   isLeftPanelOpen: boolean
   isRightPanelOpen: boolean
+  isAiPanelOpen: boolean
   isHierarchyPanelOpen: boolean
   isHelpOpen: boolean
 }
@@ -202,6 +203,8 @@ interface SandboxState extends SandboxScene {
   recording: RecordingState
   /** Whether the physics simulation is currently running. */
   isRunning: boolean
+  /** Pending impulse request: { itemId, impulse vector }. Consumed once per frame. */
+  pendingImpulse: { itemId: string; impulse: [number, number, number] } | null
 
   addItem: (
     shape: SandboxShape,
@@ -231,6 +234,8 @@ interface SandboxState extends SandboxScene {
   removeJoint: (id: string) => void
   updateJoint: (id: string, patch: Partial<SandboxJoint>) => void
   setUI: (patch: Partial<SandboxUIState>) => void
+  requestImpulse: (itemId: string, impulse: [number, number, number]) => void
+  clearPendingImpulse: () => void
   snapToGround: (id: string) => void
   toggleLock: (id: string) => void
   toggleVisibility: (id: string) => void
@@ -420,6 +425,7 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     isFullscreen: false,
     isLeftPanelOpen: true,
     isRightPanelOpen: true,
+    isAiPanelOpen: true,
     isHierarchyPanelOpen: true,
     isHelpOpen: false,
   },
@@ -651,7 +657,8 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       selectedId: null,
       multiSelectedIds: [],
       gravity: DEFAULT_GRAVITY,
-      isRunning: false,
+  isRunning: false,
+  pendingImpulse: null,
       history: pushHistory(state),
       telemetry: {
         samples: [],
@@ -794,6 +801,12 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     set((state) => ({
       ui: { ...state.ui, ...patch },
     })),
+
+  requestImpulse: (itemId, impulse) =>
+    set({ pendingImpulse: { itemId, impulse } }),
+
+  clearPendingImpulse: () =>
+    set({ pendingImpulse: null }),
 
   snapToGround: (id) =>
     set((state) => {

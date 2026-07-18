@@ -12,6 +12,7 @@ import {
   ChevronUp,
   AlertCircle,
   Cpu,
+  Square,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -65,9 +66,43 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const selectItem = useSandboxStore((s) => s.selectItem)
   const setGravity = useSandboxStore((s) => s.setGravity)
   const clearScene = useSandboxStore((s) => s.clearScene)
+  const requestImpulse = useSandboxStore((s) => s.requestImpulse)
 
   const measurementData = useSyncExternalStore(subscribeMeasurementData, getMeasurementData)
-  const [messages, setMessages] = useState<Message[]>([])
+
+  const STORAGE_KEY = 'phyverse-ai-chat'
+  const MAX_MESSAGES = 200
+
+  function loadMessages(): Message[] {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      return parsed.slice(-MAX_MESSAGES)
+    } catch {
+      return []
+    }
+  }
+
+  function saveMessages(msgs: Message[]) {
+    try {
+      const trimmed = msgs.length > MAX_MESSAGES ? msgs.slice(-MAX_MESSAGES) : msgs
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+    } catch {
+      // localStorage full or unavailable
+    }
+  }
+
+  function clearStoredMessages() {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // ignore
+    }
+  }
+
+  const [messages, setMessages] = useState<Message[]>(loadMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,6 +111,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const streamedToolCallsRef = useRef<Record<number, ToolCallState>>({})
+
+  // Persist messages to localStorage on every change
+  useEffect(() => {
+    saveMessages(messages)
+  }, [messages])
 
   useEffect(() => {
     if (!user) return
@@ -104,8 +144,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         clearScene: () => clearScene(),
         selectItem: (id) => selectItem(id),
         setGravity: (g) => setGravity(g),
-        applyImpulse: () => {
-          setError(t('ai.agent.impulseNotAvailable'))
+        applyImpulse: (id, impulse) => {
+          requestImpulse(id, impulse)
         },
         saveScene: async (name, description) => {
           await saveScene({ name, description, data: { items, gravity } })
@@ -125,6 +165,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       clearScene,
       selectItem,
       setGravity,
+      requestImpulse,
       t,
     ]
   )
@@ -424,7 +465,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   }
 
   return (
-    <div className="flex h-[560px] flex-col rounded-xl border border-border bg-paper shadow-sm">
+    <div className="flex h-full flex-col rounded-xl border border-border bg-paper shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
@@ -454,7 +495,10 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
-            onClick={() => setMessages([])}
+            onClick={() => {
+              setMessages([])
+              clearStoredMessages()
+            }}
             title={t('ai.agent.clear')}
           >
             <RotateCcw className="h-4 w-4" />
@@ -600,9 +644,19 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             exit={{ opacity: 0, height: 0 }}
             className="border-t border-border px-4 py-2"
           >
-            <div className="flex items-start gap-2 rounded-lg bg-danger/5 px-3 py-2 text-xs text-danger">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-              <span>{error}</span>
+            <div className="flex items-center gap-2 rounded-lg bg-danger/5 px-3 py-2">
+              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-danger" />
+              <span className="flex-1 text-xs text-danger">{error}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null)
+                  handleSend()
+                }}
+                className="rounded-md px-2 py-0.5 text-xs font-medium text-danger hover:bg-danger/10"
+              >
+                {t('ai.agent.retry')}
+              </button>
             </div>
           </motion.div>
         )}
@@ -624,14 +678,24 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             disabled={isLoading || !config}
             className="flex-1"
           />
-          <Button
-            isLoading={isLoading}
-            disabled={!input.trim() || !config}
-            onClick={handleSend}
-            className="px-3"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {isLoading ? (
+            <Button
+              variant="secondary"
+              onClick={() => abortRef.current?.abort()}
+              className="px-3"
+              title={t('ai.agent.stop')}
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              disabled={!input.trim() || !config}
+              onClick={handleSend}
+              className="px-3"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         {!config && (
           <button

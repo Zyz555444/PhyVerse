@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { RootLayout } from '@/app/layouts/RootLayout'
+import { SandboxLayout } from '@/app/layouts/SandboxLayout'
 import { PageLoader } from '@/shared/ui/PageLoader'
 import { NotFound } from '@/pages/NotFound'
 import { ErrorPage } from '@/pages/ErrorPage'
@@ -15,6 +16,21 @@ function LazyPage({ children }: { children: React.ReactNode }) {
 }
 
 const router = createBrowserRouter([
+  {
+    path: '/sandbox',
+    element: <SandboxLayout />,
+    errorElement: <ErrorPage />,
+    children: [
+      {
+        index: true,
+        element: (
+          <LazyPage>
+            <Sandbox />
+          </LazyPage>
+        ),
+      },
+    ],
+  },
   {
     path: '/',
     element: <RootLayout />,
@@ -33,14 +49,6 @@ const router = createBrowserRouter([
         element: (
           <LazyPage>
             <Experiment />
-          </LazyPage>
-        ),
-      },
-      {
-        path: 'sandbox',
-        element: (
-          <LazyPage>
-            <Sandbox />
           </LazyPage>
         ),
       },

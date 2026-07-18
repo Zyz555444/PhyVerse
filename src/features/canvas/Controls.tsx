@@ -44,14 +44,24 @@ export function CameraController({
       return
     }
 
+    // Disable damping during view switch for instant snap
+    const ctrl = controlsRef.current
+    if (ctrl) {
+      ctrl.enableDamping = false
+    }
+
     camera.position.set(...position)
     camera.lookAt(new THREE.Vector3(...target))
 
-    if (controlsRef.current) {
-      controlsRef.current.target.set(...target)
-      controlsRef.current.update()
+    if (ctrl) {
+      ctrl.target.set(...target)
+      ctrl.update()
+      // Re-enable damping after the frame
+      requestAnimationFrame(() => {
+        ctrl.enableDamping = enableDamping
+      })
     }
-  }, [view, target, camera])
+  }, [view, target, camera, enableDamping])
 
   // Re-aim the camera at focusTarget when focusKey bumps.
   useEffect(() => {
