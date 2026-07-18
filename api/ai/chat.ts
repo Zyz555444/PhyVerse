@@ -42,24 +42,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   }
 
   try {
+    console.log('[ai/chat] step=ensureTables')
     await ensureTables()
 
+    console.log('[ai/chat] step=selectConfig userId=%s', authUser.userId)
     const configResult = await sql`
       SELECT provider, endpoint, model, api_key_encrypted, api_key_iv, api_key_tag
       FROM ai_configs
       WHERE user_id = ${authUser.userId}
     `
     if (configResult.length === 0) {
+      console.log('[ai/chat] step=configNotFound userId=%s', authUser.userId)
       res.status(404).json({ error: 'AI config not found. Please configure in settings first.' })
       return
     }
 
     const config = configResult[0]
-    const apiKey = await aesDecrypt({
-      encrypted: config.api_key_encrypted,
-      iv: config.api_key_iv,
-      tag: config.api_key_tag,
-    })
+    console.log('[ai/chat] step=decryptApiKey provider=%s model=%s', config.provider, config.model)
+
+    let apiKey: string
+    try {
+      apiKey = await aesDecrypt({
+        encrypted: config.api_key_encrypted,
+        iv: config.api_key_iv,
+        tag: config.api_key_tag,
+      })
+    } catch (decryptErr) {
+      console.error('[ai/chat] step=decryptFailed error=%s', (decryptErr as Error).message)
+      res.status(500).json({ error: 'Failed to decrypt API key. Please reconfigure your AI provider in settings.' })
+      return
+    }
 
     const requestBody: Record<string, unknown> = {
       model: config.model,
@@ -76,6 +88,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       requestBody.max_tokens = max_tokens
     }
 
+    console.log('[ai/chat] step=callUpstream endpoint=%s model=%s stream=%s',
+      config.endpoint, config.model, stream ?? true)
     const upstreamResponse = await fetch(config.endpoint, {
       method: 'POST',
       headers: {
@@ -87,16 +101,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     if (!upstreamResponse.ok) {
       const errorText = await upstreamResponse.text()
+      console.error('[ai/chat] step=upstreamError status=%d body=%s',
+        upstreamResponse.status, errorText.slice(0, 500))
       res.status(upstreamResponse.status).json({ error: errorText || 'AI request failed' })
       return
     }
 
     if (!upstreamResponse.body || !stream) {
+      console.log('[ai/chat] step=returningJson')
       const data = await upstreamResponse.json()
       res.status(200).json(data)
       return
     }
 
+    console.log('[ai/chat] step=streaming')
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
@@ -105,13 +123,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     while (true) {
       const { done, value } = await reader.read()
-      if (done) break
+      if (done) {
+        console.log('[ai/chat] step=streamDone')
+        break
+      }
       res.write(Buffer.from(value))
     }
 
     res.end()
   } catch (error) {
-    console.error('AI chat error:', error)
+    console.error('[ai/chat] step=catch error=%s stack=%s',
+      (error as Error).message, (error as Error).stack?.slice(0, 500))
     res.status(500).json({ error: 'Internal server error' })
   }
 }
