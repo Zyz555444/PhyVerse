@@ -1,4 +1,5 @@
 import { registerExperiment } from '../registry'
+import { magnitude } from '@/shared/utils/vectorMath'
 import type { DataCollector, ExperimentDefinition } from '@/shared/types/experiment'
 import type { PhysicsWorld } from '@/features/physics/PhysicsWorld'
 
@@ -11,8 +12,7 @@ function createAccelerationCollector(): DataCollector {
     collect: (world: PhysicsWorld) => {
       const cart = world.getBody('cart')
       if (!cart) return 0
-      const v = cart.rigidBody.linvel()
-      const speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+      const speed = magnitude(cart.rigidBody.linvel())
       const dt = world.getTimestep()
       let accel = 0
       if (lastSpeed !== null && dt > 0) {

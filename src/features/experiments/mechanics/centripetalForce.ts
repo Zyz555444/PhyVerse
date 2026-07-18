@@ -1,5 +1,6 @@
 import { registerExperiment } from '../registry'
 import { createJoint } from '@/features/physics/JointFactory'
+import { magnitude, magnitudeXZ, distanceXZ } from '@/shared/utils/vectorMath'
 import type { ExperimentDefinition } from '@/shared/types/experiment'
 
 interface CentripetalData {
@@ -127,8 +128,7 @@ const centripetalForceExperiment: ExperimentDefinition = {
       collect: (world) => {
         const ball = world.getBody('ball')
         if (!ball) return 0
-        const v = ball.rigidBody.linvel()
-        return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        return magnitude(ball.rigidBody.linvel())
       },
     },
     {
@@ -139,11 +139,7 @@ const centripetalForceExperiment: ExperimentDefinition = {
         const pivot = world.getBody('pivot')
         const ball = world.getBody('ball')
         if (!pivot || !ball) return 0
-        const pp = pivot.rigidBody.translation()
-        const bp = ball.rigidBody.translation()
-        const dx = bp.x - pp.x
-        const dz = bp.z - pp.z
-        return Math.sqrt(dx * dx + dz * dz)
+        return distanceXZ(ball.rigidBody.translation(), pivot.rigidBody.translation())
       },
     },
     {
@@ -154,13 +150,8 @@ const centripetalForceExperiment: ExperimentDefinition = {
         const pivot = world.getBody('pivot')
         const ball = world.getBody('ball')
         if (!pivot || !ball) return 0
-        const pp = pivot.rigidBody.translation()
-        const bp = ball.rigidBody.translation()
-        const dx = bp.x - pp.x
-        const dz = bp.z - pp.z
-        const r = Math.sqrt(dx * dx + dz * dz)
-        const v = ball.rigidBody.linvel()
-        const speed = Math.sqrt(v.x * v.x + v.z * v.z)
+        const r = distanceXZ(ball.rigidBody.translation(), pivot.rigidBody.translation())
+        const speed = magnitudeXZ(ball.rigidBody.linvel())
         if (r < 0.01) return 0
         return speed / r
       },
@@ -174,13 +165,8 @@ const centripetalForceExperiment: ExperimentDefinition = {
         const ball = world.getBody('ball')
         if (!pivot || !ball) return 0
         const data = ball.rigidBody.userData as CentripetalData
-        const pp = pivot.rigidBody.translation()
-        const bp = ball.rigidBody.translation()
-        const dx = bp.x - pp.x
-        const dz = bp.z - pp.z
-        const r = Math.sqrt(dx * dx + dz * dz)
-        const v = ball.rigidBody.linvel()
-        const speed = Math.sqrt(v.x * v.x + v.z * v.z)
+        const r = distanceXZ(ball.rigidBody.translation(), pivot.rigidBody.translation())
+        const speed = magnitudeXZ(ball.rigidBody.linvel())
         if (r < 0.01) return 0
         return (data.mass * speed * speed) / r
       },

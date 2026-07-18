@@ -1,4 +1,5 @@
 import { registerExperiment } from '../registry'
+import { magnitude } from '@/shared/utils/vectorMath'
 import type { ExperimentDefinition } from '@/shared/types/experiment'
 
 interface MotionData {
@@ -138,8 +139,7 @@ const motionCompositionExperiment: ExperimentDefinition = {
       collect: (world) => {
         const block = world.getBody('wax-block')
         if (!block) return 0
-        const v = block.rigidBody.linvel()
-        return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+        return magnitude(block.rigidBody.linvel())
       },
     },
     {

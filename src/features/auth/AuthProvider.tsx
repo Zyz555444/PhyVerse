@@ -2,14 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { AuthContext } from './AuthContext'
 import type { User } from './authTypes'
 import { login as loginApi, register as registerApi, fetchCurrentUser } from './authApi'
+import { TOKEN_KEY, getStoredToken } from '@/shared/utils/apiClient'
 
-const TOKEN_KEY = 'phyverse-token'
 const USER_KEY = 'phyverse-user'
-
-function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return window.localStorage.getItem(TOKEN_KEY)
-}
 
 function getStoredUser(): User | null {
   if (typeof window === 'undefined') return null
