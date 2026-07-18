@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSandboxStore } from './sandboxStore'
@@ -12,45 +11,65 @@ export function BoxSelection() {
   const selectItems = useSandboxStore((s) => s.selectItems)
   const items = useSandboxStore((s) => s.items)
 
-  const [dragging, setDragging] = useState(false)
-  const [rect, setRect] = useState<{
-    left: number
-    top: number
-    width: number
-    height: number
-  } | null>(null)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const multiRef = useRef(false)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
 
-  const parent = gl.domElement.parentElement
+  const createOverlay = useCallback(() => {
+    if (overlayRef.current) return overlayRef.current
+    overlayRef.current = document.createElement('div')
+    overlayRef.current.className =
+      'pointer-events-none absolute z-10 rounded-sm border border-accent bg-accent-soft/20'
+    return overlayRef.current
+  }, [])
+
+  const removeOverlay = useCallback(() => {
+    if (overlayRef.current) {
+      overlayRef.current.remove()
+      overlayRef.current = null
+    }
+  }, [])
+
+  const updateOverlay = useCallback(
+    (x1: number, y1: number, x2: number, y2: number) => {
+      const el = createOverlay()
+      const parent = gl.domElement.parentElement
+      if (!parent || !parent.contains(el)) {
+        parent?.appendChild(el)
+      }
+      Object.assign(el.style, {
+        left: `${Math.min(x1, x2)}px`,
+        top: `${Math.min(y1, y2)}px`,
+        width: `${Math.abs(x2 - x1)}px`,
+        height: `${Math.abs(y2 - y1)}px`,
+      })
+    },
+    [gl, createOverlay]
+  )
+
+  const getPoint = useCallback(
+    (e: PointerEvent) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    },
+    [gl]
+  )
 
   useEffect(() => {
     const dom = gl.domElement
-    if (!parent) return
-
-    const getPoint = (e: PointerEvent) => {
-      const rect = dom.getBoundingClientRect()
-      return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-    }
 
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0) return
       if (e.target !== dom) return
       startRef.current = getPoint(e)
       multiRef.current = e.ctrlKey || e.metaKey || e.shiftKey
-      setDragging(true)
-      setRect({ left: startRef.current.x, top: startRef.current.y, width: 0, height: 0 })
+      updateOverlay(startRef.current.x, startRef.current.y, startRef.current.x, startRef.current.y)
     }
 
     const handlePointerMove = (e: PointerEvent) => {
       if (!startRef.current) return
       const point = getPoint(e)
-      setRect({
-        left: Math.min(startRef.current.x, point.x),
-        top: Math.min(startRef.current.y, point.y),
-        width: Math.abs(point.x - startRef.current.x),
-        height: Math.abs(point.y - startRef.current.y),
-      })
+      updateOverlay(startRef.current.x, startRef.current.y, point.x, point.y)
     }
 
     const handlePointerUp = (e: PointerEvent) => {
@@ -94,8 +113,7 @@ export function BoxSelection() {
       }
 
       startRef.current = null
-      setDragging(false)
-      setRect(null)
+      removeOverlay()
     }
 
     dom.addEventListener('pointerdown', handlePointerDown)
@@ -105,21 +123,9 @@ export function BoxSelection() {
       dom.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
+      removeOverlay()
     }
-  }, [gl, camera, size, items, selectItem, selectItems, parent])
+  }, [gl, camera, size, items, selectItem, selectItems, getPoint, updateOverlay, removeOverlay])
 
-  if (!dragging || !rect || !parent) return null
-
-  return createPortal(
-    <div
-      className="pointer-events-none absolute z-10 rounded-sm border border-accent bg-accent-soft/20"
-      style={{
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      }}
-    />,
-    parent
-  )
+  return null
 }
