@@ -30,7 +30,6 @@ export interface ConversationMemory {
 
 const MEMORY_STORAGE_KEY = 'phyverse-ai-memory'
 const MAX_MEMORY_ENTRIES = 100
-const MEMORY_RETENTION_DAYS = 30
 
 class AiMemorySystem {
   private memory: Map<string, ConversationMemory> = new Map()
@@ -65,32 +64,6 @@ class AiMemorySystem {
       localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(obj))
     } catch (err) {
       console.error('[AiMemory] Failed to save memory:', err)
-    }
-  }
-
-  private cleanupOldEntries(): void {
-    const cutoff = Date.now() - MEMORY_RETENTION_DAYS * 24 * 60 * 60 * 1000
-    
-    for (const [userId, memory] of this.memory.entries()) {
-      // Clean old messages
-      memory.messages = memory.messages.filter(m => m.timestamp > cutoff)
-      
-      // Clean old scene snapshots
-      memory.sceneSnapshots = memory.sceneSnapshots.filter(s => s.timestamp > cutoff)
-      
-      // Clean old experiment patterns
-      memory.experimentPatterns = memory.experimentPatterns.filter(
-        p => p.lastUsed > cutoff
-      )
-      
-      // Clean old error patterns
-      memory.errorPatterns = memory.errorPatterns.filter(
-        e => e.lastOccurrence > cutoff
-      )
-      
-      if (memory.messages.length === 0 && memory.sceneSnapshots.length === 0) {
-        this.memory.delete(userId)
-      }
     }
   }
 

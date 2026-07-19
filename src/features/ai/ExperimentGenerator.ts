@@ -347,7 +347,6 @@ class ExperimentGenerator {
     options: GenerationOptions
   ): ExperimentScenario | null {
     // Basic custom experiment generation
-    const hasGravity = description.includes('重力') || description.includes('gravity')
     const hasCollision = description.includes('碰撞') || description.includes('collision')
     const hasEnergy = description.includes('能量') || description.includes('energy')
 

@@ -264,7 +264,7 @@ class ExperimentValidator {
             if (measurement.targetId) {
               const targetExists = scenario.setup.objects.some(obj => 
                 obj.shape === measurement.targetId || 
-                (measurement.targetId.startsWith('box-') && obj.shape === 'box')
+                (measurement.targetId!.startsWith('box-') && obj.shape === 'box')
               )
               if (!targetExists) {
                 warnings.push(`测量目标不存在: ${measurement.targetId}`)

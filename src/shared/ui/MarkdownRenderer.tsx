@@ -46,16 +46,16 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
       }
 
       // Inline code
-      let processedLine = line
+      let processedLine: React.ReactNode = line
       const codeRegex = /`([^`]+)`/g
-      const codeMatches = [...processedLine.matchAll(codeRegex)]
+      const codeMatches = [...line.matchAll(codeRegex)]
       
       if (codeMatches.length > 0) {
         const parts: React.ReactNode[] = []
         let lastIndex = 0
         
         codeMatches.forEach((match) => {
-          const before = processedLine.slice(lastIndex, match.index)
+          const before = line.slice(lastIndex, match.index)
           if (before) parts.push(before)
           parts.push(
             <code key={`inline-${i}-${match.index}`} className="bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm font-mono">
@@ -65,7 +65,7 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
           lastIndex = (match.index || 0) + match[0].length
         })
         
-        const after = processedLine.slice(lastIndex)
+        const after = line.slice(lastIndex)
         if (after) parts.push(after)
         
         processedLine = <>{parts}</>
