@@ -51,6 +51,10 @@ export interface AiAgentPanelProps {
   onOpenSettings: () => void
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
+}
+
 export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const { t } = useI18n()
   const { user } = useAuth()
@@ -116,6 +120,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   useEffect(() => {
     saveMessages(messages)
   }, [messages])
+
+  // Abort any in-flight request when the panel unmounts (e.g. hidden or route change)
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   useEffect(() => {
     if (!user) return
@@ -267,11 +276,14 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         })),
       ]
 
+      abortRef.current = new AbortController()
+
       try {
         const response = await sendAiChat({
           messages: followUpMessages as Parameters<typeof sendAiChat>[0]['messages'],
           stream: true,
           temperature: 0.3,
+          signal: abortRef.current.signal,
         })
 
         if (!response.ok || !response.body) {
@@ -321,6 +333,15 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           return [...prev.slice(0, -1), { ...last, isStreaming: false }]
         })
       } catch (err) {
+        if (isAbortError(err)) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (!last || last.role !== 'assistant' || !last.isStreaming) return prev
+            if (!last.content) return prev.filter((m) => m.id !== last.id)
+            return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+          })
+          return
+        }
         const raw = err instanceof Error ? err.message : String(err)
         console.error('Follow-up error:', raw)
         setError(raw.includes('Invalid JSON') ? 'AI 生成格式出错，请重试' : raw.slice(0, 120))
@@ -371,6 +392,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         })),
         stream: true,
         temperature: 0.3,
+        signal: abortRef.current.signal,
       })
 
       if (!response.ok || !response.body) {
@@ -430,6 +452,15 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         return [...prev.slice(0, -1), finalMessage]
       })
     } catch (err) {
+      if (isAbortError(err)) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (!last || last.id !== assistantMessage.id) return prev
+          if (!last.content) return prev.filter((m) => m.id !== assistantMessage.id)
+          return [...prev.slice(0, -1), { ...last, isStreaming: false }]
+        })
+        return
+      }
       const raw = err instanceof Error ? err.message : String(err)
       let friendly = raw
       try {
