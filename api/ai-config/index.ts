@@ -3,6 +3,7 @@ import { sql, ensureTables } from '../_lib/db.js'
 import { getAuthUser } from '../_lib/auth.js'
 import { handleCors } from '../_lib/cors.js'
 import { aesEncrypt } from '../_lib/crypto.js'
+import { assertSafeUpstreamUrl, UnsafeUrlError } from '../_lib/urlGuard.js'
 
 export interface AiConfigDto {
   id: string
@@ -64,6 +65,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (!provider || !endpoint || !model || !apiKey) {
       res.status(400).json({ error: 'provider, endpoint, model and apiKey are required' })
       return
+    }
+
+    try {
+      await assertSafeUpstreamUrl(endpoint)
+    } catch (err) {
+      if (err instanceof UnsafeUrlError) {
+        res.status(400).json({ error: `Invalid endpoint: ${err.message}` })
+        return
+      }
+      throw err
     }
 
     try {

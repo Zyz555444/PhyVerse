@@ -3,6 +3,7 @@ import { sql, ensureTables } from '../_lib/db.js'
 import { getAuthUser } from '../_lib/auth.js'
 import { handleCors } from '../_lib/cors.js'
 import { aesDecrypt, KeyVersionMismatchError } from '../_lib/crypto.js'
+import { assertSafeUpstreamUrl, UnsafeUrlError } from '../_lib/urlGuard.js'
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -58,6 +59,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const config = configResult[0]
+
+    try {
+      await assertSafeUpstreamUrl(config.endpoint)
+    } catch (urlErr) {
+      if (urlErr instanceof UnsafeUrlError) {
+        console.error('[ai/chat] step=unsafeEndpoint error=%s', urlErr.message)
+        res
+          .status(400)
+          .json({ error: 'Configured AI endpoint is not allowed. Please update it in settings.' })
+        return
+      }
+      throw urlErr
+    }
+
     console.log('[ai/chat] step=decryptApiKey provider=%s model=%s', config.provider, config.model)
 
     let apiKey: string
