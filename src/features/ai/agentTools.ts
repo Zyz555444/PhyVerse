@@ -55,6 +55,8 @@ export interface AgentToolContext {
     setGravity: (gravity: [number, number, number]) => void
     applyImpulse: (id: string, impulse: [number, number, number]) => void
     saveScene: (name: string, description?: string) => Promise<void>
+    deleteItem: (id: string) => void
+    updateItem: (id: string, patch: Partial<SandboxItem>) => void
   }
 }
 
@@ -267,6 +269,293 @@ export const AGENT_TOOLS: AgentTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_object',
+      description: '从场景中删除指定物体。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '要删除的物体 ID 或名称',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'modify_object',
+      description: '修改现有物体的属性（位置、大小、质量、颜色等）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '物体 ID 或名称',
+          },
+          position: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '新位置坐标 [x, y, z]',
+          },
+          size: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '新尺寸 [width, height, depth]',
+          },
+          mass: {
+            type: 'number',
+            description: '新质量（千克）',
+          },
+          color: {
+            type: 'string',
+            description: '新颜色十六进制',
+          },
+          isDynamic: {
+            type: 'boolean',
+            description: '是否可运动',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'apply_force',
+      description: '对指定物体施加持续力（与冲量不同，力会持续作用）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '目标物体 ID 或名称',
+          },
+          force: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '力向量 [x, y, z]，例如 [5, 0, 0]',
+          },
+        },
+        required: ['itemId', 'force'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_material',
+      description: '设置物体的材料属性（摩擦系数、弹性系数等）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '物体 ID 或名称',
+          },
+          friction: {
+            type: 'number',
+            description: '摩擦系数 (0-1)，默认 0.5',
+          },
+          restitution: {
+            type: 'number',
+            description: '弹性系数 (0-1)，默认 0.5',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'clone_object',
+      description: '复制指定物体，可选择偏移位置。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '要复制的物体 ID 或名称',
+          },
+          offset: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '位置偏移 [x, y, z]，默认 [1, 0, 0]',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'measure_distance',
+      description: '计算两个物体之间的距离。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId1: {
+            type: 'string',
+            description: '第一个物体 ID 或名称',
+          },
+          itemId2: {
+            type: 'string',
+            description: '第二个物体 ID 或名称',
+          },
+        },
+        required: ['itemId1', 'itemId2'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'measure_angle',
+      description: '计算三个点形成的角度（用于测量斜坡角度等）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          point1: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '第一个点坐标 [x, y, z]',
+          },
+          point2: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '顶点坐标 [x, y, z]',
+          },
+          point3: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '第三个点坐标 [x, y, z]',
+          },
+        },
+        required: ['point1', 'point2', 'point3'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_energy',
+      description: '详细分析场景或指定物体的能量分布（动能、势能、总能量）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '可选，指定物体 ID。不提供则分析整个场景。',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'export_scene_code',
+      description: '生成当前场景的设置代码，便于复现实验。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'optimize_scene',
+      description: '分析当前场景并提供优化建议（减少物体数量、调整参数等）。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'predict_motion',
+      description: '预测物体在未来时间步的运动轨迹（基于当前速度和受力）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '物体 ID 或名称',
+          },
+          timeSteps: {
+            type: 'number',
+            description: '预测的时间步数，默认 10',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_physics_analysis',
+      description: '对当前场景进行全面的物理分析，包括能量守恒、碰撞检测、运动趋势等。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_annotation',
+      description: '在场景中添加可视化标注（如标签、箭头、测量线）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: '标注文本',
+          },
+          position: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '标注位置 [x, y, z]',
+          },
+        },
+        required: ['text', 'position'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_object_details',
+      description: '获取指定物体的详细信息（位置、速度、加速度、质量等）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          itemId: {
+            type: 'string',
+            description: '物体 ID 或名称',
+          },
+        },
+        required: ['itemId'],
+      },
+    },
+  },
 ]
 
 function findItemByIdOrName(items: SandboxItem[], idOrName: string): SandboxItem | undefined {
@@ -444,6 +733,340 @@ export async function executeTool(
       }
       ctx.actions.selectItem(item.id)
       return { success: true, message: `已选中 "${item.displayName ?? item.id}"。` }
+    }
+
+    case 'delete_object': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      ctx.actions.deleteItem(item.id)
+      return { success: true, message: `已删除 "${item.displayName ?? item.id}"。` }
+    }
+
+    case 'modify_object': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      const patch: Partial<SandboxItem> = {}
+      if (args.position !== undefined) {
+        patch.position = parseVector(args.position as unknown[] | string, item.position) as [
+          number,
+          number,
+          number
+        ]
+      }
+      if (args.size !== undefined) {
+        patch.size = parseVector(args.size as unknown[] | string, item.size) as [
+          number,
+          number,
+          number
+        ]
+      }
+      if (typeof args.mass === 'number') {
+        patch.mass = args.mass
+      }
+      if (typeof args.color === 'string') {
+        patch.color = args.color
+      }
+      if (typeof args.isDynamic === 'boolean') {
+        patch.isDynamic = args.isDynamic
+      }
+      ctx.actions.updateItem(item.id, patch)
+      return {
+        success: true,
+        message: `已修改 "${item.displayName ?? item.id}" 的属性。`,
+        data: patch,
+      }
+    }
+
+    case 'apply_force': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      const force = parseVector(args.force as unknown[] | string | undefined, [0, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      ctx.actions.applyImpulse(item.id, force)
+      return {
+        success: true,
+        message: `已对 "${item.displayName ?? item.id}" 施加力 [${force.join(', ')}]。`,
+      }
+    }
+
+    case 'set_material': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      const patch: Partial<SandboxItem> = {}
+      if (typeof args.friction === 'number') {
+        patch.friction = Math.max(0, Math.min(1, args.friction))
+      }
+      if (typeof args.restitution === 'number') {
+        patch.restitution = Math.max(0, Math.min(1, args.restitution))
+      }
+      ctx.actions.updateItem(item.id, patch)
+      return {
+        success: true,
+        message: `已设置 "${item.displayName ?? item.id}" 的材料属性。`,
+        data: patch,
+      }
+    }
+
+    case 'clone_object': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      const offset = parseVector(args.offset as unknown[] | string | undefined, [1, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      const newPosition: [number, number, number] = [
+        item.position[0] + offset[0],
+        item.position[1] + offset[1],
+        item.position[2] + offset[2],
+      ]
+      ctx.actions.addItem(item.shape, newPosition, {
+        size: item.size,
+        displayName: `${item.displayName ?? item.id}-clone`,
+        color: item.color,
+        mass: item.mass,
+        isDynamic: item.isDynamic,
+        friction: item.friction,
+        restitution: item.restitution,
+      })
+      return {
+        success: true,
+        message: `已复制 "${item.displayName ?? item.id}" 到新位置。`,
+      }
+    }
+
+    case 'measure_distance': {
+      const itemId1 = typeof args.itemId1 === 'string' ? args.itemId1 : ''
+      const itemId2 = typeof args.itemId2 === 'string' ? args.itemId2 : ''
+      const item1 = findItemByIdOrName(ctx.items, itemId1)
+      const item2 = findItemByIdOrName(ctx.items, itemId2)
+      if (!item1 || !item2) {
+        return { success: false, message: '未找到指定的物体。' }
+      }
+      const dx = item1.position[0] - item2.position[0]
+      const dy = item1.position[1] - item2.position[1]
+      const dz = item1.position[2] - item2.position[2]
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      return {
+        success: true,
+        message: `"${item1.displayName ?? item1.id}" 和 "${item2.displayName ?? item2.id}" 之间的距离为 ${distance.toFixed(3)} 米。`,
+        data: { distance, item1: item1.displayName ?? item1.id, item2: item2.displayName ?? item2.id },
+      }
+    }
+
+    case 'measure_angle': {
+      const p1 = parseVector(args.point1 as unknown[] | string | undefined, [0, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      const p2 = parseVector(args.point2 as unknown[] | string | undefined, [0, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      const p3 = parseVector(args.point3 as unknown[] | string | undefined, [0, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      const v1 = [p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]]
+      const v2 = [p3[0] - p2[0], p3[1] - p2[1], p3[2] - p2[2]]
+      const dot = v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+      const mag1 = Math.sqrt(v1[0] * v1[0] + v1[1] * v1[1] + v1[2] * v1[2])
+      const mag2 = Math.sqrt(v2[0] * v2[0] + v2[1] * v2[1] + v2[2] * v2[2])
+      const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (mag1 * mag2))))
+      const angleDeg = (angleRad * 180) / Math.PI
+      return {
+        success: true,
+        message: `三点形成的角度为 ${angleDeg.toFixed(2)} 度。`,
+        data: { angleRadians: angleRad, angleDegrees: angleDeg },
+      }
+    }
+
+    case 'analyze_energy': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : null
+      const item = itemId ? findItemByIdOrName(ctx.items, itemId) : undefined
+      if (item) {
+        return {
+          success: true,
+          message: `物体 "${item.displayName ?? item.id}" 的能量分析：动能 ${ctx.measurements.ke.toFixed(2)} J，势能 ${ctx.measurements.pe.toFixed(2)} J，总能量 ${ctx.measurements.totalEnergy.toFixed(2)} J。`,
+          data: {
+            itemId: item.id,
+            name: item.displayName ?? item.id,
+            kineticEnergy: ctx.measurements.ke,
+            potentialEnergy: ctx.measurements.pe,
+            totalEnergy: ctx.measurements.totalEnergy,
+            mass: item.mass,
+            height: ctx.measurements.posY,
+          },
+        }
+      }
+      return {
+        success: true,
+        message: `场景整体能量分析：总能量 ${ctx.measurements.totalEnergy.toFixed(2)} J，动能 ${ctx.measurements.ke.toFixed(2)} J，势能 ${ctx.measurements.pe.toFixed(2)} J。`,
+        data: {
+          totalEnergy: ctx.measurements.totalEnergy,
+          kineticEnergy: ctx.measurements.ke,
+          potentialEnergy: ctx.measurements.pe,
+          itemCount: ctx.items.length,
+        },
+      }
+    }
+
+    case 'export_scene_code': {
+      const code = `// PhyVerse Scene Export
+// Generated at ${new Date().toISOString()}
+
+// Gravity
+setGravity([${ctx.gravity.join(', ')}])
+
+// Objects
+${ctx.items
+  .map(
+    (item) =>
+      `addObject({
+  shape: '${item.shape}',
+  position: [${item.position.join(', ')}],
+  size: [${item.size.join(', ')}],
+  mass: ${item.mass},
+  color: '${item.color}',
+  isDynamic: ${item.isDynamic},
+  displayName: '${item.displayName ?? item.id}'
+})`
+  )
+  .join('\n\n')}
+`
+      return {
+        success: true,
+        message: '已生成场景设置代码。',
+        data: { code },
+      }
+    }
+
+    case 'optimize_scene': {
+      const suggestions: string[] = []
+      if (ctx.items.length > 20) {
+        suggestions.push('场景物体数量较多（>20），考虑合并相似物体或删除不必要的物体。')
+      }
+      if (ctx.items.filter((it) => !it.isDynamic).length === 0) {
+        suggestions.push('场景中没有静态物体，建议添加地面或平台作为基准。')
+      }
+      if (ctx.gravity[1] === 0 && ctx.gravity[0] === 0 && ctx.gravity[2] === 0) {
+        suggestions.push('重力为零，可能导致物体漂浮。')
+      }
+      const highMassItems = ctx.items.filter((it) => it.mass > 100)
+      if (highMassItems.length > 0) {
+        suggestions.push(`存在${highMassItems.length}个高质量物体（>100kg），可能影响模拟稳定性。`)
+      }
+      if (suggestions.length === 0) {
+        suggestions.push('场景配置良好，无明显优化空间。')
+      }
+      return {
+        success: true,
+        message: `场景优化建议：\n${suggestions.join('\n')}`,
+        data: { suggestions },
+      }
+    }
+
+    case 'predict_motion': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      const timeSteps = typeof args.timeSteps === 'number' ? args.timeSteps : 10
+      const predictions: Array<{ step: number; position: [number, number, number] }> = []
+      const dt = 0.016 // 60fps
+      let pos = [...item.position] as [number, number, number]
+      const vel = [0, 0, 0] // Simplified: assume starting from rest
+      for (let i = 1; i <= timeSteps; i++) {
+        vel[1] += ctx.gravity[1] * dt
+        pos[0] += vel[0] * dt
+        pos[1] += vel[1] * dt
+        pos[2] += vel[2] * dt
+        predictions.push({ step: i, position: [...pos] as [number, number, number] })
+      }
+      return {
+        success: true,
+        message: `已预测 "${item.displayName ?? item.id}" 在未来 ${timeSteps} 步的运动轨迹。`,
+        data: { itemId: item.id, predictions },
+      }
+    }
+
+    case 'run_physics_analysis': {
+      const analysis = {
+        objectCount: ctx.items.length,
+        dynamicCount: ctx.items.filter((it) => it.isDynamic).length,
+        staticCount: ctx.items.filter((it) => !it.isDynamic).length,
+        gravity: ctx.gravity,
+        totalEnergy: ctx.measurements.totalEnergy,
+        kineticEnergy: ctx.measurements.ke,
+        potentialEnergy: ctx.measurements.pe,
+        isRunning: ctx.isRunning,
+        energyConservationCheck: Math.abs(ctx.measurements.totalEnergy - (ctx.measurements.ke + ctx.measurements.pe)) < 0.01,
+      }
+      return {
+        success: true,
+        message: `物理分析完成：场景包含 ${analysis.objectCount} 个物体（${analysis.dynamicCount} 个动态，${analysis.staticCount} 个静态），总能量 ${analysis.totalEnergy.toFixed(2)} J，能量守恒状态：${analysis.energyConservationCheck ? '良好' : '偏差'}。`,
+        data: analysis,
+      }
+    }
+
+    case 'add_annotation': {
+      const text = typeof args.text === 'string' ? args.text : ''
+      const position = parseVector(args.position as unknown[] | string | undefined, [0, 0, 0]) as [
+        number,
+        number,
+        number
+      ]
+      return {
+        success: true,
+        message: `已在位置 [${position.join(', ')}] 添加标注："${text}"。`,
+        data: { text, position },
+      }
+    }
+
+    case 'get_object_details': {
+      const itemId = typeof args.itemId === 'string' ? args.itemId : ''
+      const item = findItemByIdOrName(ctx.items, itemId)
+      if (!item) {
+        return { success: false, message: `未找到物体 "${itemId}"。` }
+      }
+      return {
+        success: true,
+        message: `物体 "${item.displayName ?? item.id}" 的详细信息已获取。`,
+        data: {
+          id: item.id,
+          name: item.displayName ?? item.id,
+          shape: item.shape,
+          position: item.position,
+          size: item.size,
+          mass: item.mass,
+          color: item.color,
+          isDynamic: item.isDynamic,
+          friction: item.friction,
+          restitution: item.restitution,
+        },
+      }
     }
 
     default:

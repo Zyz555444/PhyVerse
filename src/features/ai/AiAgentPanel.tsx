@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bot,
@@ -24,6 +24,7 @@ import {
 import { Button } from '@/shared/ui/Button'
 import { Input } from '@/shared/ui/Input'
 import { cn } from '@/shared/utils/cn'
+import { MarkdownRenderer } from '@/shared/ui/MarkdownRenderer'
 import { AGENT_TOOLS, executeTool } from './agentTools'
 import { sendAiChat, fetchAiConfig } from './aiConfigApi'
 import type { AiConfig } from './aiConfigTypes'
@@ -47,6 +48,114 @@ interface Message {
   isStreaming?: boolean
 }
 
+// Memoized message component for performance optimization
+const MessageComponent = React.memo(function MessageComponent({
+  message,
+  expanded,
+  onToggleExpand,
+}: {
+  message: Message
+  expanded: boolean
+  onToggleExpand: (id: string) => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        'flex gap-2',
+        message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
+      )}
+    >
+      <div
+        className={cn(
+          'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
+          message.role === 'user'
+            ? 'bg-accent text-white'
+            : 'bg-paper-secondary text-accent'
+        )}
+      >
+        {message.role === 'user' ? (
+          <span className="text-xs font-bold">U</span>
+        ) : message.role === 'tool' ? (
+          <Wrench className="h-3.5 w-3.5" />
+        ) : (
+          <Bot className="h-3.5 w-3.5" />
+        )}
+      </div>
+      <div
+        className={cn(
+          'max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed',
+          message.role === 'user'
+            ? 'bg-accent text-white'
+            : message.role === 'tool'
+              ? 'border border-border bg-paper-secondary text-text-secondary'
+              : 'border border-border bg-paper-secondary text-text-primary'
+        )}
+      >
+        {message.content ? (
+          <MarkdownRenderer content={message.content} />
+        ) : message.isStreaming ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : null}
+
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {message.toolCalls.map((call, idx) => (
+              <div
+                key={`${call.id}-${idx}`}
+                className="rounded-lg border border-border bg-paper px-2 py-1.5"
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggleExpand(message.id)}
+                  className="flex w-full items-center justify-between text-[10px]"
+                >
+                  <span className="flex items-center gap-1.5 font-medium text-text-secondary">
+                    <Wrench className="h-3 w-3" />
+                    {call.name}
+                    {call.status === 'pending' && (
+                      <Loader2 className="h-3 w-3 animate-spin text-accent" />
+                    )}
+                    {call.status === 'success' && (
+                      <span className="text-green-500">✓</span>
+                    )}
+                    {call.status === 'error' && <span className="text-danger">✗</span>}
+                  </span>
+                  {expanded ? (
+                    <ChevronUp className="h-3 w-3 text-text-tertiary" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-text-tertiary" />
+                  )}
+                </button>
+                <AnimatePresence>
+                  {expanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <pre className="mt-1.5 whitespace-pre-wrap break-all rounded bg-paper-secondary p-1.5 text-[9px] text-text-tertiary">
+                        {call.arguments}
+                      </pre>
+                      {call.result && (
+                        <p className="mt-1 text-[9px] text-text-secondary">
+                          {call.result}
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+})
+
 export interface AiAgentPanelProps {
   onOpenSettings: () => void
 }
@@ -64,6 +173,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const gravity = useSandboxStore((s) => s.gravity)
   const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
   const addItem = useSandboxStore((s) => s.addItem)
+  const removeItem = useSandboxStore((s) => s.removeItem)
+  const updateItem = useSandboxStore((s) => s.updateItem)
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
   const setRunning = useSandboxStore((s) => s.setRunning)
   const resetScene = useSandboxStore((s) => s.resetScene)
@@ -115,6 +226,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const streamedToolCallsRef = useRef<Record<number, ToolCallState>>({})
+  const activeRequestIdRef = useRef<string | null>(null)
 
   // Persist messages to localStorage on every change
   useEffect(() => {
@@ -123,7 +235,10 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
 
   // Abort any in-flight request when the panel unmounts (e.g. hidden or route change)
   useEffect(() => {
-    return () => abortRef.current?.abort()
+    return () => {
+      abortRef.current?.abort()
+      activeRequestIdRef.current = null
+    }
   }, [])
 
   useEffect(() => {
@@ -159,6 +274,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         saveScene: async (name, description) => {
           await saveScene({ name, description, data: { items, gravity } })
         },
+        deleteItem: (id) => removeItem(id),
+        updateItem: (id, patch) => updateItem(id, patch),
       },
     }),
     [
@@ -175,39 +292,98 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       selectItem,
       setGravity,
       requestImpulse,
+      removeItem,
+      updateItem,
     ]
   )
 
   const systemPrompt = useMemo(
-    () =>
-      `你是 Phyverse AI Agent，一个物理沙盒实验助手。你可以通过工具调用直接操作沙盒环境、搭建模型、读取测量数据并回答用户问题。\n当前时间缩放：${timeScale}x。选中物体：${selectedId ? getFriendlyName(items, selectedId) : '无'}。`,
-    [timeScale, selectedId, items]
+    () => {
+      const selectedName = selectedId ? getFriendlyName(items, selectedId) : '无'
+      const objectCount = items.length
+      const dynamicCount = items.filter(it => it.isDynamic).length
+      const staticCount = objectCount - dynamicCount
+      
+      return `你是 Phyverse AI Agent，一个专业的物理沙盒实验助手。你的职责是帮助用户搭建物理模型、进行实验、分析数据并理解物理概念。
+
+## 当前场景状态
+- 物体总数: ${objectCount} (动态: ${dynamicCount}, 静态: ${staticCount})
+- 重力加速度: [${gravity.join(', ')}] m/s²
+- 时间缩放: ${timeScale}x
+- 选中物体: ${selectedName}
+- 模拟状态: ${isRunning ? '运行中' : '已暂停'}
+
+## 可用工具
+你有 ${AGENT_TOOLS.length} 个工具可用，包括：
+- 场景操作: 添加、删除、修改、复制物体
+- 模拟控制: 运行、暂停、重置、设置时间缩放
+- 物理设置: 设置重力、施加冲量/力、设置材料属性
+- 测量分析: 获取场景信息、测量摘要、能量分析、距离/角度测量
+- 高级功能: 场景优化、运动预测、物理分析、代码导出
+
+## 指导原则
+1. **教育性**: 逐步引导用户理解物理概念，提供清晰的解释
+2. **安全性**: 避免创建可能导致模拟崩溃的场景（如过多物体、极端参数）
+3. **准确性**: 确保物理设置符合实际物理定律
+4. **实用性**: 优先使用最简洁有效的方法完成任务
+5. **容错性**: 当工具执行失败时，提供替代方案或解释原因
+
+## 错误处理
+- 如果物体未找到，检查名称是否正确或使用 ID
+- 如果参数无效，提供合理的默认值或建议范围
+- 如果操作失败，解释原因并提供恢复建议
+
+## 物理知识
+- 能量守恒: 在理想情况下，总能量 = 动能 + 势能
+- 摩擦力: 影响物体运动，可通过摩擦系数调节
+- 弹性碰撞: 通过弹性系数控制碰撞后的能量损失
+- 重力: 默认为 -9.81 m/s²，可根据实验需求调整
+
+请用中文回答，保持专业、友好、教育性的语气。`
+    },
+    [timeScale, selectedId, items, gravity, isRunning]
   )
 
   const parseStreamChunk = (
     raw: string,
     toolCallsRef: React.MutableRefObject<Record<number, ToolCallState>>
-  ): { content: string; toolCalls: ToolCallState[] } => {
+  ): { content: string; toolCalls: ToolCallState[]; errors: string[] } => {
     let content = ''
-    for (const line of raw.split('\n')) {
+    const errors: string[] = []
+    const lines = raw.split('\n')
+    
+    for (const line of lines) {
       const trimmed = line.trim()
       if (!trimmed || !trimmed.startsWith('data:')) continue
       const data = trimmed.slice(5).trim()
       if (data === '[DONE]') continue
+      
       try {
         const parsed = JSON.parse(data)
         const delta = parsed.choices?.[0]?.delta
-        if (delta?.content) {
+        
+        if (delta?.content && typeof delta.content === 'string') {
           content += delta.content
         }
-        if (delta?.tool_calls) {
+        
+        if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
           for (const tc of delta.tool_calls) {
-            const existing = toolCallsRef.current[tc.index]
+            if (!tc || typeof tc !== 'object') continue
+            
+            const index = typeof tc.index === 'number' ? tc.index : -1
+            if (index < 0) continue
+            
+            const existing = toolCallsRef.current[index]
             if (existing) {
-              existing.arguments += tc.function?.arguments ?? ''
+              if (tc.function?.arguments && typeof tc.function.arguments === 'string') {
+                existing.arguments += tc.function.arguments
+              }
+              if (tc.function?.name && typeof tc.function.name === 'string' && !existing.name) {
+                existing.name = tc.function.name
+              }
             } else {
-              toolCallsRef.current[tc.index] = {
-                id: tc.id ?? `tool-${Date.now()}-${tc.index}`,
+              toolCallsRef.current[index] = {
+                id: tc.id ?? `tool-${Date.now()}-${index}`,
                 name: tc.function?.name ?? '',
                 arguments: tc.function?.arguments ?? '',
                 status: 'pending',
@@ -215,34 +391,77 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             }
           }
         }
-      } catch {
-        // ignore malformed lines
+      } catch (parseErr) {
+        // Log malformed lines but don't fail the entire stream
+        const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+        if (data.length > 0 && data !== '[DONE]') {
+          errors.push(`Failed to parse stream chunk: ${errMsg.slice(0, 100)}`)
+        }
       }
     }
-    return { content, toolCalls: Object.values(toolCallsRef.current) }
+    
+    return { content, toolCalls: Object.values(toolCallsRef.current), errors }
   }
 
   const executeToolCalls = useCallback(
     async (toolCalls: ToolCallState[]) => {
       const results: Array<{ tool_call_id: string; role: 'tool'; content: string; name: string }> =
         []
+      
       for (const call of toolCalls) {
         let args: Record<string, unknown> = {}
+        
+        // Parse arguments with better error handling
         try {
-          args = JSON.parse(call.arguments)
-        } catch {
-          // ignore
+          if (!call.arguments || call.arguments.trim() === '') {
+            args = {}
+          } else {
+            args = JSON.parse(call.arguments)
+          }
+        } catch (parseErr) {
+          const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+          call.status = 'error'
+          call.result = `参数解析失败: ${errMsg.slice(0, 100)}`
+          results.push({
+            tool_call_id: call.id,
+            role: 'tool',
+            content: call.result,
+            name: call.name,
+          })
+          console.error(`[AiAgentPanel] Failed to parse tool arguments for ${call.name}:`, errMsg)
+          continue
         }
-        const result = await executeTool(call.name, args, toolContext)
-        call.status = result.success ? 'success' : 'error'
-        call.result = result.message
-        results.push({
-          tool_call_id: call.id,
-          role: 'tool',
-          content: result.message,
-          name: call.name,
-        })
+        
+        // Execute tool with error handling
+        try {
+          const result = await executeTool(call.name, args, toolContext)
+          call.status = result.success ? 'success' : 'error'
+          call.result = result.message
+          results.push({
+            tool_call_id: call.id,
+            role: 'tool',
+            content: result.message,
+            name: call.name,
+          })
+          
+          // Log errors for debugging
+          if (!result.success) {
+            console.error(`[AiAgentPanel] Tool execution failed for ${call.name}:`, result.message)
+          }
+        } catch (execErr) {
+          const errMsg = execErr instanceof Error ? execErr.message : String(execErr)
+          call.status = 'error'
+          call.result = `工具执行异常: ${errMsg.slice(0, 100)}`
+          results.push({
+            tool_call_id: call.id,
+            role: 'tool',
+            content: call.result,
+            name: call.name,
+          })
+          console.error(`[AiAgentPanel] Tool execution exception for ${call.name}:`, execErr)
+        }
       }
+      
       return results
     },
     [toolContext]
@@ -304,14 +523,19 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         let buffer = ''
         streamedToolCallsRef.current = {}
 
+        let streamErrors: string[] = []
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
           buffer += decoder.decode(value, { stream: true })
-          const { content, toolCalls: newToolCalls } = parseStreamChunk(
+          const { content, toolCalls: newToolCalls, errors } = parseStreamChunk(
             buffer,
             streamedToolCallsRef
           )
+          
+          if (errors.length > 0) {
+            streamErrors.push(...errors)
+          }
 
           setMessages((prev) => {
             const last = prev[prev.length - 1]
@@ -325,6 +549,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
               },
             ]
           })
+        }
+        
+        // Log any stream parsing errors that occurred
+        if (streamErrors.length > 0) {
+          console.warn('[AiAgentPanel] Stream parsing errors:', streamErrors.slice(0, 5))
         }
 
         setMessages((prev) => {
@@ -356,6 +585,15 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       setError(t('ai.agent.configRequired'))
       return
     }
+
+    // Prevent concurrent requests
+    if (activeRequestIdRef.current) {
+      console.warn('[AiAgentPanel] Request already in progress, ignoring new request')
+      return
+    }
+
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    activeRequestIdRef.current = requestId
 
     const userMessage: Message = {
       id: `u-${Date.now()}`,
@@ -404,11 +642,16 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       const decoder = new TextDecoder()
       let buffer = ''
 
+      let streamErrors: string[] = []
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
-        const { content, toolCalls } = parseStreamChunk(buffer, streamedToolCallsRef)
+        const { content, toolCalls, errors } = parseStreamChunk(buffer, streamedToolCallsRef)
+        
+        if (errors.length > 0) {
+          streamErrors.push(...errors)
+        }
 
         setMessages((prev) => {
           const last = prev[prev.length - 1]
@@ -422,6 +665,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             },
           ]
         })
+      }
+      
+      // Log any stream parsing errors that occurred
+      if (streamErrors.length > 0) {
+        console.warn('[AiAgentPanel] Stream parsing errors:', streamErrors.slice(0, 5))
       }
 
       setMessages((prev) => {
@@ -452,6 +700,12 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         return [...prev.slice(0, -1), finalMessage]
       })
     } catch (err) {
+      // Only handle error if this is still the active request
+      if (activeRequestIdRef.current !== requestId) {
+        console.warn('[AiAgentPanel] Ignoring error from stale request')
+        return
+      }
+      
       if (isAbortError(err)) {
         setMessages((prev) => {
           const last = prev[prev.length - 1]
@@ -482,8 +736,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       setError(friendly)
       setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id))
     } finally {
-      setIsLoading(false)
-      abortRef.current = null
+      if (activeRequestIdRef.current === requestId) {
+        setIsLoading(false)
+        abortRef.current = null
+        activeRequestIdRef.current = null
+      }
     }
   }, [
     input,
@@ -587,98 +844,12 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         ) : (
           <div className="flex flex-col gap-3">
             {messages.map((message) => (
-              <motion.div
+              <MessageComponent
                 key={message.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn(
-                  'flex gap-2',
-                  message.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                )}
-              >
-                <div
-                  className={cn(
-                    'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
-                    message.role === 'user'
-                      ? 'bg-accent text-white'
-                      : 'bg-paper-secondary text-accent'
-                  )}
-                >
-                  {message.role === 'user' ? (
-                    <span className="text-xs font-bold">U</span>
-                  ) : message.role === 'tool' ? (
-                    <Wrench className="h-3.5 w-3.5" />
-                  ) : (
-                    <Bot className="h-3.5 w-3.5" />
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    'max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed',
-                    message.role === 'user'
-                      ? 'bg-accent text-white'
-                      : message.role === 'tool'
-                        ? 'border border-border bg-paper-secondary text-text-secondary'
-                        : 'border border-border bg-paper-secondary text-text-primary'
-                  )}
-                >
-                  {message.content ||
-                    (message.isStreaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null)}
-
-                  {message.toolCalls && message.toolCalls.length > 0 && (
-                    <div className="mt-2 space-y-1.5">
-                      {message.toolCalls.map((call, idx) => (
-                        <div
-                          key={`${call.id}-${idx}`}
-                          className="rounded-lg border border-border bg-paper px-2 py-1.5"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => toggleToolExpand(message.id)}
-                            className="flex w-full items-center justify-between text-[10px]"
-                          >
-                            <span className="flex items-center gap-1.5 font-medium text-text-secondary">
-                              <Wrench className="h-3 w-3" />
-                              {call.name}
-                              {call.status === 'pending' && (
-                                <Loader2 className="h-3 w-3 animate-spin text-accent" />
-                              )}
-                              {call.status === 'success' && (
-                                <span className="text-green-500">✓</span>
-                              )}
-                              {call.status === 'error' && <span className="text-danger">✗</span>}
-                            </span>
-                            {expandedTools[message.id] ? (
-                              <ChevronUp className="h-3 w-3 text-text-tertiary" />
-                            ) : (
-                              <ChevronDown className="h-3 w-3 text-text-tertiary" />
-                            )}
-                          </button>
-                          <AnimatePresence>
-                            {expandedTools[message.id] && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
-                              >
-                                <pre className="mt-1.5 whitespace-pre-wrap break-all rounded bg-paper-secondary p-1.5 text-[9px] text-text-tertiary">
-                                  {call.arguments}
-                                </pre>
-                                {call.result && (
-                                  <p className="mt-1 text-[9px] text-text-secondary">
-                                    {call.result}
-                                  </p>
-                                )}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
+                message={message}
+                expanded={expandedTools[message.id] || false}
+                onToggleExpand={toggleToolExpand}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>
