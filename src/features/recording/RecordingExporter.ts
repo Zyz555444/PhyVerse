@@ -7,21 +7,37 @@ import type { RecordingState } from '@/features/sandbox/sandboxStore'
  */
 export function exportRecordingAsWebM(recording: RecordingState): void {
   const { frames } = recording
-  if (frames.length === 0) return
+  if (frames.length === 0) {
+    console.warn('[RecordingExporter] no frames to export as WebM')
+    return
+  }
 
   const canvas = document.createElement('canvas')
   canvas.width = 1280
   canvas.height = 720
   const ctx = canvas.getContext('2d')
-  if (!ctx) return
+  if (!ctx) {
+    console.error('[RecordingExporter] could not obtain 2D canvas context; WebM export aborted')
+    return
+  }
 
   const stream = canvas.captureStream(30)
   const chunks: Blob[] = []
 
-  const mediaRecorder = new MediaRecorder(stream, {
-    mimeType: 'video/webm;codecs=vp9',
-    videoBitsPerSecond: 5000000,
-  })
+  let mediaRecorder: MediaRecorder
+  try {
+    mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm;codecs=vp9',
+      videoBitsPerSecond: 5000000,
+    })
+  } catch (err) {
+    console.error('[RecordingExporter] MediaRecorder is not supported for this format:', err)
+    return
+  }
+
+  mediaRecorder.onerror = (e) => {
+    console.error('[RecordingExporter] MediaRecorder error while capturing WebM:', e)
+  }
 
   mediaRecorder.ondataavailable = (e) => {
     if (e.data.size > 0) {

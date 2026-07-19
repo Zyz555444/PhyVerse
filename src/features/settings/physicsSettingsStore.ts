@@ -38,7 +38,8 @@ function loadStoredSettings(): Partial<PhysicsSettingsState> {
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Partial<PhysicsSettingsState>
     return parsed
-  } catch {
+  } catch (err) {
+    console.warn('[physicsSettingsStore] failed to parse stored settings, using defaults:', err)
     return {}
   }
 }
@@ -101,5 +102,9 @@ export const usePhysicsSettingsStore = create<PhysicsSettingsState>((set, get) =
 
 usePhysicsSettingsStore.subscribe((state) => {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch (err) {
+    console.warn('[physicsSettingsStore] failed to persist settings:', err)
+  }
 })

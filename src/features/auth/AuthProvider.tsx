@@ -16,7 +16,8 @@ function getStoredUser(): User | null {
   try {
     const raw = window.localStorage.getItem(USER_KEY)
     return raw ? (JSON.parse(raw) as User) : null
-  } catch {
+  } catch (err) {
+    console.warn('[AuthProvider] failed to parse stored user, ignoring it:', err)
     return null
   }
 }
@@ -40,8 +41,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentUser)
         window.localStorage.setItem(USER_KEY, JSON.stringify(currentUser))
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return
+        console.warn('[AuthProvider] session validation failed, signing out:', err)
         window.localStorage.removeItem(TOKEN_KEY)
         window.localStorage.removeItem(USER_KEY)
         setToken(null)

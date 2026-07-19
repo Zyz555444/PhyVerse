@@ -146,7 +146,8 @@ export function loadStoredScene(): SandboxScene | null {
   try {
     const parsed = JSON.parse(raw) as unknown
     return migrateScene(parsed)
-  } catch {
+  } catch (err) {
+    console.warn('[sceneStorage] failed to load stored scene, discarding it:', err)
     return null
   }
 }
