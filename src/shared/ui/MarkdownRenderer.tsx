@@ -73,21 +73,22 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
 
       // Bold text
       if (typeof processedLine === 'string') {
+        const boldLine = processedLine
         const boldRegex = /\*\*([^*]+)\*\*/g
-        const boldMatches = [...processedLine.matchAll(boldRegex)]
+        const boldMatches = [...boldLine.matchAll(boldRegex)]
         
         if (boldMatches.length > 0) {
           const parts: React.ReactNode[] = []
           let lastIndex = 0
           
           boldMatches.forEach((match) => {
-            const before = processedLine.slice(lastIndex, match.index)
+            const before = boldLine.slice(lastIndex, match.index)
             if (before) parts.push(before)
             parts.push(<strong key={`bold-${i}-${match.index}`}>{match[1]}</strong>)
             lastIndex = (match.index || 0) + match[0].length
           })
           
-          const after = processedLine.slice(lastIndex)
+          const after = boldLine.slice(lastIndex)
           if (after) parts.push(after)
           
           processedLine = <>{parts}</>
@@ -96,21 +97,22 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
 
       // Italic text
       if (typeof processedLine === 'string') {
+        const italicLine = processedLine
         const italicRegex = /\*([^*]+)\*/g
-        const italicMatches = [...processedLine.matchAll(italicRegex)]
+        const italicMatches = [...italicLine.matchAll(italicRegex)]
         
         if (italicMatches.length > 0) {
           const parts: React.ReactNode[] = []
           let lastIndex = 0
           
           italicMatches.forEach((match) => {
-            const before = processedLine.slice(lastIndex, match.index)
+            const before = italicLine.slice(lastIndex, match.index)
             if (before) parts.push(before)
             parts.push(<em key={`italic-${i}-${match.index}`}>{match[1]}</em>)
             lastIndex = (match.index || 0) + match[0].length
           })
           
-          const after = processedLine.slice(lastIndex)
+          const after = italicLine.slice(lastIndex)
           if (after) parts.push(after)
           
           processedLine = <>{parts}</>
