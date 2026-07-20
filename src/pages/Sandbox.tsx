@@ -39,6 +39,7 @@ import { EnergyBar } from '@/features/sandbox/EnergyBar'
 import { ForceFieldRenderer } from '@/features/sandbox/ForceFieldRenderer'
 import { AiAgentPanel } from '@/features/ai/AiAgentPanel'
 import { AiSettingsModal } from '@/features/ai/AiSettingsModal'
+import { SandboxParticles } from '@/features/sandbox/SandboxParticles'
 import { RecipePanel } from '@/features/recipe/RecipePanel'
 import { type Recipe } from '@/features/recipe/recipeTypes'
 import { MeasurementOverlay } from '@/features/measurement/MeasurementOverlay'
@@ -528,6 +529,7 @@ export function Sandbox() {
                 <ForceVisualizer isRunning={isRunning} />
                 <EnergyBar isRunning={isRunning} />
                 <ForceFieldRenderer isRunning={isRunning} />
+                <SandboxParticles />
                 <MeasurementOverlay isRunning={isRunning} />
                 <MeasurementDataCollector />
                 <BoxSelection />

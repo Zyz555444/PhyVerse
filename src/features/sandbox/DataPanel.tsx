@@ -16,13 +16,10 @@ import { cn } from '@/shared/utils/cn'
 import { useSandboxStore, type TelemetrySample } from './sandboxStore'
 import { getFriendlyName } from './friendlyName'
 import { exportTelemetryCsv } from './sceneStorage'
+import { CanvasChart, CrosshairCanvas, type CanvasChartInteraction } from './CanvasChart'
 
 const CHART_W = 320
 const CHART_H = 110
-const PAD_L = 36
-const PAD_R = 8
-const PAD_T = 8
-const PAD_B = 18
 
 function Reading({
   label,
@@ -51,45 +48,6 @@ function Reading({
   )
 }
 
-function findClosestSample(
-  samples: TelemetrySample[],
-  targetT: number
-): TelemetrySample | null {
-  if (samples.length === 0) return null
-  let lo = 0
-  let hi = samples.length - 1
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (samples[mid].t < targetT) {
-      lo = mid + 1
-    } else {
-      hi = mid
-    }
-  }
-  const idx = lo === 0 ? 0 : Math.abs(samples[lo].t - targetT) < Math.abs(samples[lo - 1].t - targetT) ? lo : lo - 1
-  return samples[Math.min(idx, samples.length - 1)]
-}
-
-function buildPolyline(
-  samples: TelemetrySample[],
-  viewMin: number,
-  viewMax: number,
-  maxSpeed: number
-): string {
-  if (samples.length < 2) return ''
-  const plotW = CHART_W - PAD_L - PAD_R
-  const plotH = CHART_H - PAD_T - PAD_B
-  const denomT = Math.max(viewMax - viewMin, 0.001)
-  const denomV = Math.max(maxSpeed, 0.001)
-  return samples
-    .map((s) => {
-      const x = PAD_L + ((s.t - viewMin) / denomT) * plotW
-      const y = PAD_T + plotH - (s.speed / denomV) * plotH
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    })
-    .join(' ')
-}
-
 export function DataPanel() {
   const { t } = useI18n()
   const telemetry = useSandboxStore((s) => s.telemetry)
@@ -103,13 +61,9 @@ export function DataPanel() {
   const [collapsed, setCollapsed] = useState(true)
   const [viewMin, setViewMin] = useState(0)
   const [viewExtent, setViewExtent] = useState(0)
-  const [hovering, setHovering] = useState(false)
   const [hoverSample, setHoverSample] = useState<TelemetrySample | null>(null)
   const [hoverX, setHoverX] = useState(0)
   const [hoverY, setHoverY] = useState(0)
-  const [dragStart, setDragStart] = useState<{ x: number; viewMin: number } | null>(null)
-
-  const svgRef = useRef<SVGSVGElement>(null)
 
   const trackedId = telemetry.trackedId ?? selectedId
   const trackedItem = useMemo(
@@ -133,24 +87,15 @@ export function DataPanel() {
       ? Math.min(viewMin + viewExtent, maxT)
       : maxT
 
-  // When maxT changes (new data), auto-scroll to show latest unless user has panned
+  // Auto-scroll to latest when new data arrives (only when not zoomed/panned)
   const prevMaxT = useRef(0)
-  if (maxT !== prevMaxT.current && !dragStart && viewExtent === 0) {
+  const [dragRef] = useState<{ current: boolean }>({ current: false })
+  if (maxT !== prevMaxT.current && !dragRef.current && viewExtent === 0) {
     prevMaxT.current = maxT
     setViewMin(0)
   } else {
     prevMaxT.current = maxT
   }
-
-  const visibleSamples = useMemo(() => {
-    if (viewExtent === 0) return samples
-    return samples.filter((s) => s.t >= viewMin && s.t <= viewMax)
-  }, [samples, viewMin, viewMax, viewExtent])
-
-  const points = useMemo(
-    () => buildPolyline(samples, viewMin, viewMax, maxSpeed),
-    [samples, viewMin, viewMax, maxSpeed]
-  )
 
   const handleExportCsv = () => {
     if (samples.length === 0) return
@@ -162,132 +107,18 @@ export function DataPanel() {
     ? (trackedItem.displayName ?? getFriendlyName(items, trackedItem.id))
     : null
 
-  // Chart interaction helpers
-  const getChartCoords = useCallback(
-    (clientX: number, clientY: number) => {
-      const svg = svgRef.current
-      if (!svg) return { x: 0, y: 0 }
-      const rect = svg.getBoundingClientRect()
-      const scaleX = CHART_W / rect.width
-      const scaleY = CHART_H / rect.height
-      return {
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY,
-      }
+  const handleInteraction = useCallback((interaction: CanvasChartInteraction) => {
+    setHoverSample(interaction.hoverSample)
+    setHoverX(interaction.hoverX)
+    setHoverY(interaction.hoverY)
+  }, [])
+
+  const handleViewChange = useCallback(
+    (newViewMin: number, newViewExtent: number) => {
+      setViewMin(newViewMin)
+      setViewExtent(newViewExtent)
     },
     []
-  )
-
-  const screenToTime = useCallback(
-    (x: number) => {
-      const plotW = CHART_W - PAD_L - PAD_R
-      const denomT = Math.max(viewMax - viewMin, 0.001)
-      return viewMin + ((x - PAD_L) / plotW) * denomT
-    },
-    [viewMin, viewMax]
-  )
-
-  const timeToScreen = useCallback(
-    (t: number) => {
-      const plotW = CHART_W - PAD_L - PAD_R
-      const denomT = Math.max(viewMax - viewMin, 0.001)
-      return PAD_L + ((t - viewMin) / denomT) * plotW
-    },
-    [viewMin, viewMax]
-  )
-
-  const speedToScreen = useCallback(
-    (v: number) => {
-      const plotH = CHART_H - PAD_T - PAD_B
-      const denomV = Math.max(maxSpeed, 0.001)
-      return PAD_T + plotH - (v / denomV) * plotH
-    },
-    [maxSpeed]
-  )
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      if (!samples.length) return
-      const coords = getChartCoords(e.clientX, e.clientY)
-      const t = screenToTime(coords.x)
-
-      // Clamp to plot area
-      const plotW = CHART_W - PAD_L - PAD_R
-      const plotH = CHART_H - PAD_T - PAD_B
-      const clampedX = Math.max(PAD_L, Math.min(PAD_L + plotW, coords.x))
-      const clampedY = Math.max(PAD_T, Math.min(PAD_T + plotH, coords.y))
-
-      const sample = findClosestSample(samples, t)
-
-      setHovering(true)
-      setHoverX(clampedX)
-      setHoverY(clampedY)
-      setHoverSample(sample)
-    },
-    [samples, getChartCoords, screenToTime]
-  )
-
-  const handleMouseLeave = useCallback(() => {
-    setHovering(false)
-    setHoverSample(null)
-    setDragStart(null)
-  }, [])
-
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<SVGSVGElement>) => {
-      e.preventDefault()
-      if (maxT <= 0) return
-
-      const coords = getChartCoords(e.clientX, e.clientY)
-      const cursorT = screenToTime(coords.x)
-      const currentExtent = viewExtent > 0 ? viewExtent : maxT
-
-      const zoomFactor = e.deltaY < 0 ? 0.85 : 1.18
-      let newExtent = currentExtent * zoomFactor
-
-      // Clamp: minimum 0.5s view, maximum full range
-      newExtent = Math.max(0.5, Math.min(newExtent, maxT))
-
-      // Keep the cursor position fixed during zoom
-      const cursorRatio = currentExtent > 0 ? (cursorT - viewMin) / currentExtent : 0
-      let newMin = cursorT - cursorRatio * newExtent
-
-      // Clamp viewMin
-      newMin = Math.max(0, Math.min(newMin, maxT - newExtent))
-
-      setViewMin(newMin)
-      setViewExtent(newExtent < maxT * 0.99 ? newExtent : 0)
-    },
-    [maxT, viewMin, viewExtent, getChartCoords, screenToTime]
-  )
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      if (viewExtent === 0) return // No pan needed at full view
-      setDragStart({ x: e.clientX, viewMin })
-    },
-    [viewMin, viewExtent]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    setDragStart(null)
-  }, [])
-
-  const handleMouseMoveForDrag = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
-      handleMouseMove(e)
-      if (!dragStart || viewExtent === 0) return
-      const dx = dragStart.x - e.clientX
-      const currentExtent = viewExtent > 0 ? viewExtent : maxT
-      const rect = svgRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const scaleX = CHART_W / rect.width
-      const plotW = CHART_W - PAD_L - PAD_R
-      const timePerPixel = currentExtent / plotW
-      const newMin = dragStart.viewMin + dx * scaleX * timePerPixel
-      setViewMin(Math.max(0, Math.min(newMin, maxT - currentExtent)))
-    },
-    [dragStart, viewExtent, maxT, handleMouseMove]
   )
 
   const handleResetView = () => {
@@ -296,6 +127,7 @@ export function DataPanel() {
   }
 
   const isZoomed = viewExtent > 0
+  const hovering = hoverSample !== null
 
   return (
     <div className="flex-shrink-0 rounded-lg border border-border bg-paper-secondary">
@@ -459,144 +291,24 @@ export function DataPanel() {
             </div>
 
             <div className="relative">
-              <svg
-                ref={svgRef}
-                viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-                className="h-28 w-full cursor-crosshair"
-                preserveAspectRatio="none"
-                onMouseMove={dragStart ? handleMouseMoveForDrag : handleMouseMove}
-                onMouseLeave={handleMouseLeave}
-                onMouseDown={handleMouseDown}
-                onMouseUp={handleMouseUp}
-                onWheel={handleWheel}
-              >
-                {/* Grid lines */}
-                <line
-                  x1={PAD_L}
-                  y1={PAD_T}
-                  x2={PAD_L}
-                  y2={CHART_H - PAD_B}
-                  stroke="currentColor"
-                  className="text-border"
-                  strokeWidth={1}
-                />
-                <line
-                  x1={PAD_L}
-                  y1={CHART_H - PAD_B}
-                  x2={CHART_W - PAD_R}
-                  y2={CHART_H - PAD_B}
-                  stroke="currentColor"
-                  className="text-border"
-                  strokeWidth={1}
-                />
-                {/* Mid grid */}
-                <line
-                  x1={PAD_L}
-                  y1={PAD_T + (CHART_H - PAD_T - PAD_B) / 2}
-                  x2={CHART_W - PAD_R}
-                  y2={PAD_T + (CHART_H - PAD_T - PAD_B) / 2}
-                  stroke="currentColor"
-                  className="text-border"
-                  strokeWidth={0.5}
-                  strokeDasharray="2 2"
-                />
-
-                {/* Axis labels */}
-                <text
-                  x={PAD_L - 4}
-                  y={PAD_T + 4}
-                  textAnchor="end"
-                  className="fill-text-tertiary"
-                  fontSize={8}
-                >
-                  {maxSpeed.toFixed(1)}
-                </text>
-                <text
-                  x={PAD_L - 4}
-                  y={CHART_H - PAD_B}
-                  textAnchor="end"
-                  className="fill-text-tertiary"
-                  fontSize={8}
-                >
-                  0
-                </text>
-                <text
-                  x={CHART_W - PAD_R}
-                  y={CHART_H - 4}
-                  textAnchor="end"
-                  className="fill-text-tertiary"
-                  fontSize={8}
-                >
-                  {maxT.toFixed(1)}s
-                </text>
-
-                {/* Polyline */}
-                {points && (
-                  <polyline
-                    points={points}
-                    fill="none"
-                    stroke="#3b82f6"
-                    strokeWidth={1.5}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* Crosshair tooltip */}
-                {hovering && points && (
-                  <>
-                    {/* Vertical line */}
-                    <line
-                      x1={hoverX}
-                      y1={PAD_T}
-                      x2={hoverX}
-                      y2={CHART_H - PAD_B}
-                      stroke="currentColor"
-                      className="text-text-tertiary"
-                      strokeWidth={0.5}
-                      strokeDasharray="3 3"
-                    />
-                    {/* Horizontal line */}
-                    <line
-                      x1={PAD_L}
-                      y1={hoverY}
-                      x2={CHART_W - PAD_R}
-                      y2={hoverY}
-                      stroke="currentColor"
-                      className="text-text-tertiary"
-                      strokeWidth={0.5}
-                      strokeDasharray="3 3"
-                    />
-                    {/* Hover dot on the line at current x */}
-                    {hoverSample && (() => {
-                      const dx = timeToScreen(hoverSample.t)
-                      const dy = speedToScreen(hoverSample.speed)
-                      return (
-                        <circle
-                          cx={dx}
-                          cy={dy}
-                          r={3}
-                          fill="white"
-                          stroke="#3b82f6"
-                          strokeWidth={1.5}
-                        />
-                      )
-                    })()}
-                  </>
-                )}
-
-                {!points && (
-                  <text
-                    x={CHART_W / 2}
-                    y={CHART_H / 2}
-                    textAnchor="middle"
-                    className="fill-text-tertiary"
-                    fontSize={10}
-                  >
-                    {t('sandbox.dataEmptyHint')}
-                  </text>
-                )}
-              </svg>
+              <CanvasChart
+                samples={samples}
+                maxT={maxT}
+                maxSpeed={maxSpeed}
+                viewMin={viewMin}
+                viewExtent={viewExtent}
+                onViewChange={handleViewChange}
+                onInteraction={handleInteraction}
+                emptyText={t('sandbox.dataEmptyHint')}
+              />
+              <CrosshairCanvas
+                hoverSample={hoverSample}
+                hoverX={hoverX}
+                hoverY={hoverY}
+                maxSpeed={maxSpeed}
+                viewMin={viewMin}
+                viewMax={viewMax}
+              />
 
               {/* Tooltip */}
               {hovering && hoverSample && (
@@ -604,7 +316,7 @@ export function DataPanel() {
                   className="pointer-events-none absolute z-10 -translate-x-1/2 rounded border border-border bg-paper px-2 py-1 shadow-md"
                   style={{
                     left: `${(hoverX / CHART_W) * 100}%`,
-                    top: `${((hoverY) / CHART_H) * 100}%`,
+                    top: `${(hoverY / CHART_H) * 100}%`,
                     marginTop: '-2.5rem',
                   }}
                 >
