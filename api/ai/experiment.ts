@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { handleCors } from '@/api/cors'
-import { getAuthUser } from '@/api/auth'
-import { experimentGenerator } from '@/features/ai/ExperimentGenerator'
-import { experimentValidator } from '@/features/ai/ExperimentValidator'
-import type { ExperimentScenario, GenerationOptions } from '@/features/ai/ExperimentGenerator'
+import { handleCors } from '../_lib/cors.js'
+import { getAuthUser } from '../_lib/auth.js'
+import { experimentGenerator } from '../../src/features/ai/ExperimentGenerator.js'
+import { experimentValidator } from '../../src/features/ai/ExperimentValidator.js'
+import type { ExperimentScenario, GenerationOptions } from '../../src/features/ai/ExperimentGenerator.js'
 
 interface GenerateRequestBody {
   description: string
