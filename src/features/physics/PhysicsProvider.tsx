@@ -29,23 +29,46 @@ export function PhysicsProvider({
     () => ({ ...globalConfig, ...config }),
     [globalConfig, config]
   )
-  const [world] = useState(() => new PhysicsWorld(mergedConfig))
+  const [world, setWorld] = useState<PhysicsWorld | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Async initialization of physics world
+  useEffect(() => {
+    let mounted = true
+    const initPhysics = async () => {
+      try {
+        // Initialize Rapier WASM if needed
+        await PhysicsWorld.init()
+        if (!mounted) return
+        
+        const newWorld = new PhysicsWorld(mergedConfig)
+        setWorld(newWorld)
+        setIsInitialized(true)
+      } catch (error) {
+        console.error('Failed to initialize physics world:', error)
+      }
+    }
+    
+    initPhysics()
+    
+    return () => {
+      mounted = false
+      if (world) {
+        world.dispose()
+      }
+    }
+  }, []) // Only run once on mount
 
   useEffect(() => {
+    if (!world) return
     world.setGravity(mergedConfig.gravity[0], mergedConfig.gravity[1], mergedConfig.gravity[2])
     world.setTimestep(mergedConfig.timestep)
   }, [world, mergedConfig])
 
-  useEffect(() => {
-    return () => {
-      world.dispose()
-    }
-  }, [world])
-
   const accumulatorRef = useRef(0)
 
   useFrame((_, delta) => {
-    if (!world.isReady || !autoStep) return
+    if (!world || !world.isReady || !autoStep) return
 
     const timestep = fixedTimestep ?? world.getTimestep()
     const scaledDelta = delta * timeScale
@@ -58,7 +81,7 @@ export function PhysicsProvider({
     }
   })
 
-  const ctxValue: PhysicsContextValue = useMemo(() => ({ world, isReady: true }), [world])
+  const ctxValue: PhysicsContextValue = useMemo(() => ({ world, isReady: isInitialized && world !== null }), [world, isInitialized])
 
   return <PhysicsContext.Provider value={ctxValue}>{children}</PhysicsContext.Provider>
 }

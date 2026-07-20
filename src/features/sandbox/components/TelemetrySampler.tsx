@@ -6,7 +6,8 @@ import { usePhysics } from '@/features/physics/usePhysics'
 
 /**
  * Samples physics state of the tracked body each frame and feeds it into the
- * telemetry store. Live readings update ~10Hz; historical samples flush ~30Hz.
+ * telemetry store. Live readings update ~10Hz; historical samples flush ~15Hz.
+ * Frame-skipping implemented: samples every 3rd frame to reduce CPU load.
  */
 export function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
@@ -25,6 +26,8 @@ export function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
   const prevVelRef = useRef(new THREE.Vector3())
   const hasPrevRef = useRef(false)
   const lastTrackedRef = useRef<string | null>(null)
+  const frameCounterRef = useRef(0)
+  const TELEMETRY_FRAME_SKIP = 3 // Sample every 3rd frame
 
   // Reset local timing state when sampling toggles or tracked target changes.
   useEffect(() => {
@@ -36,6 +39,10 @@ export function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
 
   useFrame((_, delta) => {
     if (!isRunning || !world?.isReady || !trackedId) return
+    
+    frameCounterRef.current += 1
+    if (frameCounterRef.current % TELEMETRY_FRAME_SKIP !== 0) return
+    
     const record = world.getBody(trackedId)
     if (!record) return
     const item = items.find((it) => it.id === trackedId)
@@ -96,7 +103,7 @@ export function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
     if (sampling) {
       sampleBufferRef.current.push(sample)
       pushAccumRef.current += scaledDelta
-      if (pushAccumRef.current >= 0.033) {
+      if (pushAccumRef.current >= 0.067) {
         pushSamples(sampleBufferRef.current, pushAccumRef.current)
         sampleBufferRef.current = []
         pushAccumRef.current = 0

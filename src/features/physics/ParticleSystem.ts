@@ -18,6 +18,8 @@ export interface ParticleSystemConfig {
   restitution?: number
   /** Enable particle-particle collision. Default: false (expensive for large N) */
   particleCollisions?: boolean
+  /** Spatial hash cell size for collision optimization. Default: 2x particle radius */
+  spatialHashCellSize?: number
   seed?: number
 }
 
@@ -52,6 +54,7 @@ export class ParticleSystem {
   private rng: () => number
   private dummy: THREE.Object3D
   private boundsObj: THREE.Box3
+  private spatialHashCellSize: number
 
   constructor(config: ParticleSystemConfig) {
     this.config = {
@@ -59,8 +62,10 @@ export class ParticleSystem {
       gravity: [0, 0, 0],
       restitution: 1.0,
       particleCollisions: false,
+      spatialHashCellSize: config.radius * 2,
       ...config,
     }
+    this.spatialHashCellSize = this.config.spatialHashCellSize ?? config.radius * 2
     this.particles = []
     this.rng = mulberry32(this.config.seed ?? DEFAULT_SEED)
     this.dummy = new THREE.Object3D()
@@ -211,54 +216,90 @@ export class ParticleSystem {
 
   private handleParticleCollisions(): void {
     const particles = this.particles
-    const n = particles.length
-    for (let i = 0; i < n; i++) {
-      const a = particles[i]
-      if (!a.alive) continue
-      for (let j = i + 1; j < n; j++) {
-        const b = particles[j]
-        if (!b.alive) continue
+    const cellSize = this.spatialHashCellSize
+    
+    // Build spatial hash grid
+    const spatialHash = new Map<string, number[]>()
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i]
+      if (!p.alive) continue
+      
+      const cellX = Math.floor(p.px / cellSize)
+      const cellY = Math.floor(p.py / cellSize)
+      const cellZ = Math.floor(p.pz / cellSize)
+      const key = `${cellX},${cellY},${cellZ}`
+      
+      if (!spatialHash.has(key)) {
+        spatialHash.set(key, [])
+      }
+      spatialHash.get(key)!.push(i)
+    }
+    
+    // Check collisions only within neighboring cells
+    for (const [key, indices] of spatialHash) {
+      const [cellX, cellY, cellZ] = key.split(',').map(Number)
+      
+      // Check current cell and all 26 neighboring cells
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            const neighborKey = `${cellX + dx},${cellY + dy},${cellZ + dz}`
+            const neighborIndices = spatialHash.get(neighborKey)
+            if (!neighborIndices) continue
+            
+            for (const i of indices) {
+              const a = particles[i]
+              if (!a.alive) continue
+              
+              for (const j of neighborIndices) {
+                if (i >= j) continue // Avoid duplicate checks and self-checks
+                const b = particles[j]
+                if (!b.alive) continue
 
-        const dx = b.px - a.px
-        const dy = b.py - a.py
-        const dz = b.pz - a.pz
-        const distSq = dx * dx + dy * dy + dz * dz
-        const minDist = a.radius + b.radius
+                const pdx = b.px - a.px
+                const pdy = b.py - a.py
+                const pdz = b.pz - a.pz
+                const distSq = pdx * pdx + pdy * pdy + pdz * pdz
+                const minDist = a.radius + b.radius
 
-        if (distSq < minDist * minDist && distSq > 1e-10) {
-          const dist = Math.sqrt(distSq)
-          const nx = dx / dist
-          const ny = dy / dist
-          const nz = dz / dist
+                if (distSq < minDist * minDist && distSq > 1e-10) {
+                  const dist = Math.sqrt(distSq)
+                  const nx = pdx / dist
+                  const ny = pdy / dist
+                  const nz = pdz / dist
 
-          const overlap = minDist - dist
-          const totalMass = a.mass + b.mass
-          const aRatio = b.mass / totalMass
-          const bRatio = a.mass / totalMass
+                  const overlap = minDist - dist
+                  const totalMass = a.mass + b.mass
+                  const aRatio = b.mass / totalMass
+                  const bRatio = a.mass / totalMass
 
-          a.px -= nx * overlap * aRatio
-          a.py -= ny * overlap * aRatio
-          a.pz -= nz * overlap * aRatio
-          b.px += nx * overlap * bRatio
-          b.py += ny * overlap * bRatio
-          b.pz += nz * overlap * bRatio
+                  a.px -= nx * overlap * aRatio
+                  a.py -= ny * overlap * aRatio
+                  a.pz -= nz * overlap * aRatio
+                  b.px += nx * overlap * bRatio
+                  b.py += ny * overlap * bRatio
+                  b.pz += nz * overlap * bRatio
 
-          const rvx = b.vx - a.vx
-          const rvy = b.vy - a.vy
-          const rvz = b.vz - a.vz
-          const velAlongNormal = rvx * nx + rvy * ny + rvz * nz
+                  const rvx = b.vx - a.vx
+                  const rvy = b.vy - a.vy
+                  const rvz = b.vz - a.vz
+                  const velAlongNormal = rvx * nx + rvy * ny + rvz * nz
 
-          if (velAlongNormal > 0) continue
+                  if (velAlongNormal > 0) continue
 
-          const restitution = this.config.restitution ?? 1.0
-          const impulse = (-(1 + restitution) * velAlongNormal) / (1 / a.mass + 1 / b.mass)
+                  const restitution = this.config.restitution ?? 1.0
+                  const impulse = (-(1 + restitution) * velAlongNormal) / (1 / a.mass + 1 / b.mass)
 
-          a.vx -= (impulse * nx) / a.mass
-          a.vy -= (impulse * ny) / a.mass
-          a.vz -= (impulse * nz) / a.mass
-          b.vx += (impulse * nx) / b.mass
-          b.vy += (impulse * ny) / b.mass
-          b.vz += (impulse * nz) / b.mass
+                  a.vx -= (impulse * nx) / a.mass
+                  a.vy -= (impulse * ny) / a.mass
+                  a.vz -= (impulse * nz) / a.mass
+                  b.vx += (impulse * nx) / b.mass
+                  b.vy += (impulse * ny) / b.mass
+                  b.vz += (impulse * nz) / b.mass
+                }
+              }
+            }
+          }
         }
       }
     }

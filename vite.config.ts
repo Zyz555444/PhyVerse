@@ -11,6 +11,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split heavy 3D libraries into separate chunks
+          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
+          'physics-vendor': ['@dimforge/rapier3d'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
   server: {
     allowedHosts: ['.monkeycode-ai.online'],
   },

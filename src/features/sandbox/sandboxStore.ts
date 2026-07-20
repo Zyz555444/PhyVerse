@@ -192,7 +192,7 @@ export interface TaskState {
   records: TaskRecord[]
 }
 
-const TELEMETRY_MAX_SAMPLES = 600
+const TELEMETRY_MAX_SAMPLES = 300 // Reduced from 600 for memory optimization
 
 interface HistoryState {
   past: SandboxScene[]

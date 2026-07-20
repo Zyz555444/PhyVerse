@@ -16,8 +16,8 @@ export class PhysicsWorld {
   constructor(config?: Partial<PhysicsWorldConfig>) {
     this.config = {
       gravity: [0, -9.81, 0],
-      timestep: 1 / 60,
-      maxSubSteps: 4,
+      timestep: 1 / 120,
+      maxSubSteps: 8,
       allowSleep: true,
       contactMaterial: {
         friction: 0.5,

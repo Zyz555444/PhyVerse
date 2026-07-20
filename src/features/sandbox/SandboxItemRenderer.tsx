@@ -37,7 +37,10 @@ interface ShapeGeometry {
 
 const SELECTION_COLOR = '#f59e0b'
 const TRAJECTORY_MAX_POINTS = 300
-const TRAJECTORY_SAMPLE_INTERVAL = 2
+const TRAJECTORY_SAMPLE_INTERVAL = 4 // Increased from 2 to 4 for better performance
+
+// Cache for selection outline geometries to avoid recreation
+const outlineGeometryCache = new Map<string, THREE.EdgesGeometry>()
 
 function toQuaternion(euler: [number, number, number]): [number, number, number, number] {
   const q = new THREE.Quaternion()
@@ -129,41 +132,56 @@ function SelectionOutline({
 }) {
   // The outline is a child of the mesh, so mesh scale is applied automatically.
   // Use raw size here to avoid double-scaling.
+  const cacheKey = `${shape}-${size.join(',')}`
+  
   const geometry = useMemo(() => {
+    // Check cache first
+    if (outlineGeometryCache.has(cacheKey)) {
+      return outlineGeometryCache.get(cacheKey)!
+    }
+    
+    let newGeometry: THREE.EdgesGeometry
     switch (shape) {
       case 'box':
-        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
+        newGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
+        break
       case 'sphere': {
         const r = size[0]
-        return new THREE.EdgesGeometry(new THREE.SphereGeometry(r, 24, 12))
+        newGeometry = new THREE.EdgesGeometry(new THREE.SphereGeometry(r, 24, 12))
+        break
       }
       case 'cylinder':
       case 'spring':
-        return new THREE.EdgesGeometry(new THREE.CylinderGeometry(size[0], size[0], size[1], 32))
+        newGeometry = new THREE.EdgesGeometry(new THREE.CylinderGeometry(size[0], size[0], size[1], 32))
+        break
       case 'capsule':
-        return new THREE.EdgesGeometry(new THREE.CapsuleGeometry(size[0], size[1], 16, 32))
+        newGeometry = new THREE.EdgesGeometry(new THREE.CapsuleGeometry(size[0], size[1], 16, 32))
+        break
       case 'cone':
-        return new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0], size[1], 32))
+        newGeometry = new THREE.EdgesGeometry(new THREE.ConeGeometry(size[0], size[1], 32))
+        break
       case 'torus':
-        return new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0], size[1], 16, 48))
+        newGeometry = new THREE.EdgesGeometry(new THREE.TorusGeometry(size[0], size[1], 16, 48))
+        break
       case 'plane':
-        return new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0], size[2]))
+        newGeometry = new THREE.EdgesGeometry(new THREE.PlaneGeometry(size[0], size[2]))
+        break
       case 'pulley':
       case 'slope':
       case 'barrier':
       case 'force_meter':
-        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
+        newGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
+        break
       default:
-        return new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
+        newGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(size[0], size[1], size[2]))
     }
-  }, [shape, size])
+    
+    // Cache the geometry
+    outlineGeometryCache.set(cacheKey, newGeometry)
+    return newGeometry
+  }, [shape, size, cacheKey])
 
-  useEffect(() => {
-    return () => {
-      geometry.dispose()
-    }
-  }, [geometry])
-
+  // Don't dispose cached geometries - they're shared
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color="#f59e0b" transparent opacity={0.8} />
@@ -336,8 +354,21 @@ function SlopeGeometry({
           }
         }
       })
+      // Cleanup angleIndicator geometries and materials
+      if (angleIndicator) {
+        angleIndicator.children.forEach((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose()
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose())
+            } else {
+              child.material.dispose()
+            }
+          }
+        })
+      }
     }
-  }, [boardGeo, tickGroup])
+  }, [boardGeo, tickGroup, angleIndicator])
 
   return (
     <group>

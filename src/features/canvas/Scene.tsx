@@ -20,6 +20,8 @@ export interface SceneProps {
   focusKey?: number
   /** Render the default lab environment (floor + table). */
   environment?: boolean
+  /** Device pixel ratio range for performance optimization. Default: [1, 1.5] */
+  dprRange?: [number, number]
 }
 
 export function Scene({
@@ -32,6 +34,7 @@ export function Scene({
   focusTarget,
   focusKey,
   environment = false,
+  dprRange = [1, 1.5],
 }: SceneProps) {
   return (
     <Canvas
@@ -47,7 +50,7 @@ export function Scene({
         near: 0.1,
         far: 1000,
       }}
-      dpr={[1, 2]}
+      dpr={dprRange}
     >
       <color attach="background" args={['#e8e8e2']} />
       <fog attach="fog" args={['#e8e8e2', 25, 75]} />

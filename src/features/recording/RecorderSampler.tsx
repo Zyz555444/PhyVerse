@@ -9,13 +9,13 @@ import {
 
 /**
  * Invisible component that captures the full scene state at a configurable
- * frame rate and pushes it into the recording store.
+ * frame rate and pushes it into the recording store. Default FPS reduced from 30 to 24.
  */
 export function RecorderSampler({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
   const isRecording = useSandboxStore((s) => s.recording.isRecording)
   const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
-  const recordingFps = useSandboxStore((s) => s.recording.fps)
+  const recordingFps = useSandboxStore((s) => s.recording.fps) || 24 // Default to 24fps
   const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
   const pushRecordedFrame = useSandboxStore((s) => s.pushRecordedFrame)
   const items = useSandboxStore((s) => s.items)

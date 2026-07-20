@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback } from 'react'
+import { useMemo, useState, useRef, useCallback, memo } from 'react'
 import {
   Activity,
   Play,
@@ -339,3 +339,5 @@ export function DataPanel() {
     </div>
   )
 }
+
+export default memo(DataPanel)

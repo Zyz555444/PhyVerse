@@ -150,7 +150,7 @@ export function Sandbox() {
   const debouncedSave = useDebouncedCallback((scene: SandboxScene) => {
     saveScene(scene)
     setSaved(true)
-  }, 800)
+  }, 1500) // Increased from 800ms to 1500ms to reduce save frequency
 
   useEffect(() => {
     debouncedSave({ items, gravity, joints })
@@ -162,38 +162,24 @@ export function Sandbox() {
     return () => clearTimeout(timer)
   }, [saved])
 
+  // Consolidated menu close handler to reduce event listeners
   useEffect(() => {
-    if (!showJointMenu) return
     const handler = (e: MouseEvent) => {
-      if (jointMenuRef.current && !jointMenuRef.current.contains(e.target as Node)) {
+      if (showJointMenu && jointMenuRef.current && !jointMenuRef.current.contains(e.target as Node)) {
         setShowJointMenu(false)
       }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showJointMenu])
-
-  useEffect(() => {
-    if (!showPresetMenu) return
-    const handler = (e: MouseEvent) => {
-      if (presetMenuRef.current && !presetMenuRef.current.contains(e.target as Node)) {
+      if (showPresetMenu && presetMenuRef.current && !presetMenuRef.current.contains(e.target as Node)) {
         setShowPresetMenu(false)
       }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showPresetMenu])
-
-  useEffect(() => {
-    if (!sceneMenuOpen) return
-    const handler = (e: MouseEvent) => {
-      if (sceneMenuRef.current && !sceneMenuRef.current.contains(e.target as Node)) {
+      if (sceneMenuOpen && sceneMenuRef.current && !sceneMenuRef.current.contains(e.target as Node)) {
         setSceneMenuOpen(false)
       }
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [sceneMenuOpen])
+    if (showJointMenu || showPresetMenu || sceneMenuOpen) {
+      document.addEventListener('mousedown', handler)
+      return () => document.removeEventListener('mousedown', handler)
+    }
+  }, [showJointMenu, showPresetMenu, sceneMenuOpen])
 
   useSandboxShortcuts({
     onRunToggle: () => setRunning(!isRunning),
