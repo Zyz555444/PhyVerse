@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Play,
   X,
-  RotateCcw,
   GraduationCap,
   Tag,
   Filter,
@@ -14,6 +13,9 @@ import {
 } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
+import { StepProgress } from '@/shared/ui/StepProgress'
+import { StepNavigator } from '@/shared/ui/StepNavigator'
+import { StepCard } from '@/shared/ui/StepCard'
 import { cn } from '@/shared/utils/cn'
 import { RECIPE_LIBRARY, getRecipeById } from './recipeLibrary'
 import {
@@ -72,7 +74,6 @@ export function RecipePanel({
   if (activeRecipe) {
     const step = activeRecipe.steps[currentStepIndex]
     const isLastStep = currentStepIndex >= activeRecipe.steps.length - 1
-    const progress = ((currentStepIndex + 1) / activeRecipe.steps.length) * 100
     const cat = RECIPE_CATEGORIES.find((c) => c.key === activeRecipe.category)
     const diff = RECIPE_DIFFICULTIES.find((d) => d.key === activeRecipe.difficulty)
 
@@ -107,54 +108,28 @@ export function RecipePanel({
         </div>
 
         {/* Progress bar */}
-        <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-text-tertiary">
-            <span>
-              {t('recipe.step')} {currentStepIndex + 1}/{activeRecipe.steps.length}
-            </span>
-            <span>{Math.round(progress)}%</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          {/* Step dots */}
-          <div className="flex justify-center gap-1">
-            {activeRecipe.steps.map((_, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  'h-1.5 rounded-full transition-all duration-300',
-                  idx <= currentStepIndex ? 'w-4 bg-accent' : 'w-1.5 bg-border'
-                )}
-              />
-            ))}
-          </div>
-        </div>
+        <StepProgress
+          current={currentStepIndex}
+          total={activeRecipe.steps.length}
+          showText
+          showDots
+        />
 
         {/* Current step */}
         {step && (
-          <div className="space-y-3 rounded-lg border border-border bg-paper p-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-[10px] font-bold text-accent">
-                {currentStepIndex + 1}
-              </span>
-              <span className="text-xs font-semibold text-text-primary">{t(step.title)}</span>
-            </div>
-            <p className="text-xs leading-relaxed text-text-secondary">{t(step.description)}</p>
-            {step.hint && (
-              <p className="rounded bg-background px-2.5 py-1.5 text-[11px] leading-relaxed italic text-text-tertiary">
-                {t('recipe.hint')}: {t(step.hint)}
-              </p>
-            )}
+          <StepCard
+            stepNumber={currentStepIndex + 1}
+            title={t(step.title)}
+            description={t(step.description)}
+            hint={step.hint ? t(step.hint) : undefined}
+            hintLabel={t('recipe.hint')}
+          >
             {step.setupDescription && (
               <p className="rounded border border-accent/20 bg-accent-soft/30 px-2.5 py-1.5 text-[11px] leading-relaxed text-accent">
                 {t(step.setupDescription)}
               </p>
             )}
-          </div>
+          </StepCard>
         )}
 
         {/* Learning objectives */}
@@ -174,22 +149,18 @@ export function RecipePanel({
         )}
 
         {/* Navigation */}
-        <div className="mt-auto flex items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={onResetStep} className="gap-1">
-            <RotateCcw className="h-3.5 w-3.5" />
-            {t('recipe.resetStep')}
-          </Button>
-          <div className="flex gap-2">
-            {currentStepIndex > 0 && (
-              <Button variant="ghost" size="sm" onClick={onPrevStep}>
-                {t('recipe.prev')}
-              </Button>
-            )}
-            <Button size="sm" onClick={isLastStep ? onExitRecipe : onAdvanceStep}>
-              {isLastStep ? t('recipe.finish') : t('recipe.nextStep')}
-            </Button>
-          </div>
-        </div>
+        <StepNavigator
+          isLastStep={isLastStep}
+          currentStepIndex={currentStepIndex}
+          onReset={onResetStep}
+          onPrev={onPrevStep}
+          onNext={onAdvanceStep}
+          onFinish={onExitRecipe}
+          resetLabel={t('recipe.resetStep')}
+          prevLabel={t('recipe.prev')}
+          nextLabel={t('recipe.nextStep')}
+          finishLabel={t('recipe.finish')}
+        />
       </div>
     )
   }

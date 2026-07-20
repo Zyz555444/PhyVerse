@@ -1,9 +1,14 @@
-import { Circle, Square, Download, Play, Pause, Trash2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Circle, Square, Download, Play, Pause, Trash2, FileJson } from 'lucide-react'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
+import { useI18n } from '@/shared/hooks/useI18n'
 import { cn } from '@/shared/utils/cn'
-import { exportRecordingAsWebM } from './RecordingExporter'
+import { exportRecordingAsWebM, exportRecordingAsJSON } from './RecordingExporter'
+
+const MAX_RECORDING_DURATION = 30 // seconds
 
 export function RecorderControls() {
+  const { t } = useI18n()
   const isRecording = useSandboxStore((s) => s.recording.isRecording)
   const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
   const frames = useSandboxStore((s) => s.recording.frames)
@@ -15,6 +20,28 @@ export function RecorderControls() {
   const clearRecording = useSandboxStore((s) => s.clearRecording)
 
   const duration = frames.length > 0 ? frames[frames.length - 1].time : 0
+  const limitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Auto-stop recording when duration limit is reached
+  useEffect(() => {
+    if (!isRecording) {
+      if (limitTimerRef.current) {
+        clearTimeout(limitTimerRef.current)
+        limitTimerRef.current = null
+      }
+      return
+    }
+
+    limitTimerRef.current = setTimeout(() => {
+      stopRecording()
+    }, MAX_RECORDING_DURATION * 1000)
+
+    return () => {
+      if (limitTimerRef.current) {
+        clearTimeout(limitTimerRef.current)
+      }
+    }
+  }, [isRecording, stopRecording])
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60)
@@ -25,6 +52,10 @@ export function RecorderControls() {
 
   const handleExportWebM = () => {
     exportRecordingAsWebM(recording)
+  }
+
+  const handleExportJSON = () => {
+    exportRecordingAsJSON(recording)
   }
 
   return (
@@ -46,7 +77,7 @@ export function RecorderControls() {
               className="flex items-center gap-1 rounded-lg border border-border bg-paper px-2 py-1 text-xs font-medium text-text-primary hover:border-border-strong"
             >
               <Pause className="h-3 w-3" />
-              停止回放
+              {t('sandbox.recording.stopPlayback')}
             </button>
           </>
         ) : isRecording ? (
@@ -66,7 +97,7 @@ export function RecorderControls() {
               className="flex items-center gap-1 rounded-lg border border-border bg-paper px-2 py-1 text-xs font-medium text-text-primary hover:border-border-strong"
             >
               <Square className="h-3 w-3 fill-current" />
-              停止
+              {t('sandbox.recording.stop')}
             </button>
           </>
         ) : frames.length > 0 ? (
@@ -77,12 +108,12 @@ export function RecorderControls() {
               className="flex items-center gap-1 rounded-lg border border-accent bg-accent-soft px-2 py-1 text-xs font-medium text-accent hover:bg-accent hover:text-white"
             >
               <Play className="h-3 w-3" />
-              回放
+              {t('sandbox.recording.playback')}
             </button>
             <button
               type="button"
               onClick={clearRecording}
-              title="清除录制"
+              title={t('sandbox.recording.clear')}
               className="flex items-center justify-center h-7 w-7 rounded-lg border border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary"
             >
               <Trash2 className="h-3 w-3" />
@@ -93,10 +124,18 @@ export function RecorderControls() {
               className="flex items-center gap-1 rounded-lg border border-border bg-paper px-2 py-1 text-xs font-medium text-text-secondary hover:border-border-strong hover:text-text-primary"
             >
               <Download className="h-3 w-3" />
-              导出
+              {t('sandbox.recording.export')}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportJSON}
+              title={t('sandbox.recording.exportJson')}
+              className="flex items-center justify-center h-7 w-7 rounded-lg border border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary"
+            >
+              <FileJson className="h-3 w-3" />
             </button>
             <span className="text-xs text-text-tertiary">
-              {formatDuration(duration)} · {frames.length} 帧
+              {formatDuration(duration)} · {t('sandbox.recording.frames', { count: frames.length })}
             </span>
           </>
         ) : (
@@ -106,7 +145,7 @@ export function RecorderControls() {
             className="flex items-center gap-1 rounded-lg border border-accent bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent-hover"
           >
             <Circle className="h-3 w-3 fill-danger text-danger" />
-            录制
+            {t('sandbox.recording.start')}
           </button>
         )}
       </div>

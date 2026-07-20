@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
-import { CheckCircle2, Circle, BookOpen, X, Camera, RotateCcw, ChevronRight } from 'lucide-react'
+import { CheckCircle2, Circle, BookOpen, X, Camera, RotateCcw } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { Button } from '@/shared/ui/Button'
+import { StepProgress } from '@/shared/ui/StepProgress'
+import { StepNavigator } from '@/shared/ui/StepNavigator'
+import { StepCard } from '@/shared/ui/StepCard'
 import { cn } from '@/shared/utils/cn'
 import { useSandboxStore } from './sandboxStore'
 import { TASK_REGISTRY, getTaskById, type SandboxTask } from './taskRegistry'
@@ -75,7 +78,6 @@ export function TaskPanel({
 
   const step = activeTask.steps[taskState.currentStepIndex]
   const isLastStep = taskState.currentStepIndex >= activeTask.steps.length - 1
-  const progress = ((taskState.currentStepIndex + 1) / activeTask.steps.length) * 100
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
@@ -86,29 +88,18 @@ export function TaskPanel({
         </Button>
       </div>
 
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-        <div
-          className="h-full rounded-full bg-accent transition-all"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      <StepProgress current={taskState.currentStepIndex} total={activeTask.steps.length} />
 
       {step && (
-        <div className="space-y-2 rounded-lg border border-border bg-paper p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-            <span className="text-accent">
-              {t('sandbox.taskStep')} {taskState.currentStepIndex + 1}/{activeTask.steps.length}
-            </span>
-            <ChevronRight className="h-3 w-3" />
-            {t(step.title)}
-          </div>
-          <p className="text-xs text-text-secondary">{t(step.description)}</p>
-          {step.hint && (
-            <p className="rounded bg-background px-2 py-1 text-[10px] italic text-text-tertiary">
-              {t('sandbox.taskHint')}: {t(step.hint)}
-            </p>
-          )}
-        </div>
+        <StepCard
+          stepNumber={taskState.currentStepIndex + 1}
+          totalSteps={activeTask.steps.length}
+          title={t(step.title)}
+          description={t(step.description)}
+          hint={step.hint ? t(step.hint) : undefined}
+          hintLabel={t('sandbox.taskHint')}
+          badgeVariant="text"
+        />
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -149,16 +140,17 @@ export function TaskPanel({
         </div>
       )}
 
-      <div className="mt-auto flex justify-end gap-2">
-        {taskState.currentStepIndex > 0 && (
-          <Button variant="ghost" size="sm" onClick={onResetStep}>
-            {t('sandbox.reset')}
-          </Button>
-        )}
-        <Button size="sm" onClick={isLastStep ? onExitTask : onAdvanceStep}>
-          {isLastStep ? t('sandbox.finishTask') : t('sandbox.nextStep')}
-        </Button>
-      </div>
+      <StepNavigator
+        isLastStep={isLastStep}
+        currentStepIndex={taskState.currentStepIndex}
+        onReset={onResetStep}
+        onNext={onAdvanceStep}
+        onFinish={onExitTask}
+        resetLabel={t('sandbox.reset')}
+        nextLabel={t('sandbox.nextStep')}
+        finishLabel={t('sandbox.finishTask')}
+        showReset={taskState.currentStepIndex > 0}
+      />
     </div>
   )
 }

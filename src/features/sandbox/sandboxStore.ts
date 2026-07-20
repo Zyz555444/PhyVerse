@@ -70,6 +70,25 @@ export interface SandboxItem {
   locked?: boolean
   /** Optional user-defined name; takes precedence over the auto-generated friendly name. */
   displayName?: string
+  /** Force field configuration (only for shape='force_field'). */
+  forceField?: {
+    type: 'attract' | 'repel'
+    strength: number
+  }
+}
+
+/** Extract the force field type from a SandboxItem, with backward-compatible fallback. */
+export function getForceFieldType(item: SandboxItem): 'attract' | 'repel' {
+  if (item.forceField) return item.forceField.type
+  // Legacy: friction > 0.5 means repulsive
+  return item.friction > 0.5 ? 'repel' : 'attract'
+}
+
+/** Extract the force field strength from a SandboxItem, with backward-compatible fallback. */
+export function getForceFieldStrength(item: SandboxItem): number {
+  if (item.forceField) return item.forceField.strength
+  // Legacy: mass stores field strength
+  return item.mass > 0 ? item.mass : 10
 }
 
 export interface SandboxScene {
@@ -112,6 +131,12 @@ export interface TelemetrySample {
   speed: number
   /** Linear acceleration magnitude (m/s²). */
   accel: number
+  /** Acceleration X-axis component (m/s²). */
+  accelX: number
+  /** Acceleration Y-axis component (m/s²). */
+  accelY: number
+  /** Acceleration Z-axis component (m/s²). */
+  accelZ: number
   /** Kinetic energy (J). */
   ke: number
   /** Gravitational potential energy relative to y=0 (J). */
@@ -376,6 +401,14 @@ function getEquipmentDefaults(shape: SandboxShape): Partial<SandboxItem> {
         mass: 0,
         friction: 0.5,
         restitution: 0.2,
+      }
+    case 'force_field':
+      return {
+        isDynamic: false,
+        mass: 10,
+        friction: 1.0,
+        restitution: 0,
+        forceField: { type: 'repel' as const, strength: 10 },
       }
     default:
       return {}

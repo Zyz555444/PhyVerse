@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useCallback } from 'react'
 import {
   Box,
   Circle,
@@ -15,11 +15,17 @@ import {
   Weight,
   Atom,
   Search,
+  Bookmark,
+  X,
+  Pencil,
+  Trash2,
+  EllipsisVertical,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useSandboxStore, type SandboxShape } from './sandboxStore'
 import { SANDBOX_PRESETS } from './presets'
+import { loadTemplates, deleteTemplate, renameTemplate, type SceneTemplate } from './sceneTemplates'
 import { cn } from '@/shared/utils/cn'
 
 interface PaletteItem {
@@ -54,6 +60,14 @@ export function EquipmentPalette() {
   const [tab, setTab] = useState<PaletteTab>('all')
   const addItem = useSandboxStore((s) => s.addItem)
   const loadScene = useSandboxStore((s) => s.loadScene)
+  const [userTemplates, setUserTemplates] = useState<SceneTemplate[]>(() => loadTemplates())
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const editInputRef = useRef<HTMLInputElement>(null)
+
+  const refreshTemplates = useCallback(() => {
+    setUserTemplates(loadTemplates())
+  }, [])
 
   const handleAdd = (shape: SandboxShape) => {
     addItem(shape)
@@ -63,6 +77,37 @@ export function EquipmentPalette() {
     if (window.confirm(t('sandbox.presetConfirm', { name: label }))) {
       loadScene(scene)
     }
+  }
+
+  const handleLoadTemplate = (template: SceneTemplate) => {
+    if (window.confirm(t('sandbox.presetConfirm', { name: template.name }))) {
+      loadScene(template.scene)
+    }
+  }
+
+  const handleDeleteTemplate = (id: string, name: string) => {
+    if (window.confirm(t('sandbox.templateDeleteConfirm', { name }))) {
+      deleteTemplate(id)
+      refreshTemplates()
+    }
+  }
+
+  const handleStartRename = (id: string, name: string) => {
+    setEditingId(id)
+    setEditingName(name)
+    setTimeout(() => {
+      editInputRef.current?.focus()
+      editInputRef.current?.select()
+    }, 0)
+  }
+
+  const handleCommitRename = () => {
+    if (editingId && editingName.trim()) {
+      renameTemplate(editingId, editingName.trim())
+      refreshTemplates()
+    }
+    setEditingId(null)
+    setEditingName('')
   }
 
   const normalizedQuery = query.trim().toLowerCase()
@@ -80,8 +125,18 @@ export function EquipmentPalette() {
   }, [normalizedQuery, t])
 
   const filteredPresets = useMemo(() => {
-    return SANDBOX_PRESETS.filter((preset) => preset.label.toLowerCase().includes(normalizedQuery))
+    return SANDBOX_PRESETS.filter(
+      (preset) =>
+        preset.label.toLowerCase().includes(normalizedQuery) ||
+        preset.labelKey.toLowerCase().includes(normalizedQuery)
+    )
   }, [normalizedQuery])
+
+  const filteredUserTemplates = useMemo(() => {
+    return userTemplates.filter((tmpl) =>
+      tmpl.name.toLowerCase().includes(normalizedQuery)
+    )
+  }, [normalizedQuery, userTemplates])
 
   const showGeometry = tab === 'all' || tab === 'geometry'
   const showEquipment = tab === 'all' || tab === 'equipment'
@@ -172,7 +227,7 @@ export function EquipmentPalette() {
               {t('sandbox.presets')}
             </h4>
             <div className="space-y-2">
-              {filteredPresets.map(({ id, label, scene }) => (
+              {filteredPresets.map(({ id, label, labelKey, scene }) => (
                 <button
                   key={id}
                   type="button"
@@ -183,8 +238,39 @@ export function EquipmentPalette() {
                   )}
                 >
                   <Layers className="h-4 w-4 shrink-0" />
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {showPresets && filteredUserTemplates.length > 0 && (
+          <>
+            <h4 className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-text-tertiary">
+              {t('sandbox.myTemplates')}
+            </h4>
+            <div className="space-y-2">
+              {filteredUserTemplates.map((tmpl) => (
+                <TemplateRow
+                  key={tmpl.id}
+                  template={tmpl}
+                  isEditing={editingId === tmpl.id}
+                  editingName={editingName}
+                  editInputRef={editInputRef}
+                  onLoad={() => handleLoadTemplate(tmpl)}
+                  onDelete={() => handleDeleteTemplate(tmpl.id, tmpl.name)}
+                  onStartRename={() => handleStartRename(tmpl.id, tmpl.name)}
+                  onEditNameChange={setEditingName}
+                  onCommitRename={handleCommitRename}
+                  onEditKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCommitRename()
+                    if (e.key === 'Escape') {
+                      setEditingId(null)
+                      setEditingName('')
+                    }
+                  }}
+                />
               ))}
             </div>
           </>
@@ -192,13 +278,14 @@ export function EquipmentPalette() {
 
         {filteredGeometry.length === 0 &&
           filteredEquipment.length === 0 &&
-          filteredPresets.length === 0 && (
+          filteredPresets.length === 0 &&
+          filteredUserTemplates.length === 0 && (
             <p className="py-6 text-center text-xs text-text-tertiary">
               {t('sandbox.paletteNoResults')}
             </p>
           )}
 
-        {tab === 'all' && query === '' && (
+        {tab === 'all' && query === '' && userTemplates.length === 0 && (
           <p className="mt-4 text-[10px] leading-relaxed text-text-tertiary">
             {t('sandbox.paletteHint')}
           </p>
@@ -230,5 +317,106 @@ function PaletteButton({
       <Icon className="h-5 w-5" />
       <span className="text-xs font-medium">{label}</span>
     </button>
+  )
+}
+
+function TemplateRow({
+  template,
+  isEditing,
+  editingName,
+  editInputRef,
+  onLoad,
+  onDelete,
+  onStartRename,
+  onEditNameChange,
+  onCommitRename,
+  onEditKeyDown,
+}: {
+  template: SceneTemplate
+  isEditing: boolean
+  editingName: string
+  editInputRef: React.RefObject<HTMLInputElement | null>
+  onLoad: () => void
+  onDelete: () => void
+  onStartRename: () => void
+  onEditNameChange: (name: string) => void
+  onCommitRename: () => void
+  onEditKeyDown: (e: React.KeyboardEvent) => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const { t } = useI18n()
+
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-lg border border-border p-2.5',
+        'bg-paper text-left transition-colors'
+      )}
+    >
+      <button
+        type="button"
+        onClick={onLoad}
+        className="flex flex-1 items-center gap-2 text-xs font-medium text-text-primary hover:text-accent"
+      >
+        <Bookmark className="h-4 w-4 shrink-0" />
+        {isEditing ? (
+          <input
+            ref={editInputRef}
+            type="text"
+            value={editingName}
+            onChange={(e) => onEditNameChange(e.target.value)}
+            onBlur={onCommitRename}
+            onKeyDown={onEditKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full rounded border border-accent bg-paper px-1 py-0.5 text-xs text-text-primary focus:outline-none"
+          />
+        ) : (
+          <span className="truncate">{template.name}</span>
+        )}
+      </button>
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setMenuOpen((o) => !o)
+          }}
+          className="rounded p-0.5 text-text-tertiary hover:bg-paper-secondary hover:text-text-primary"
+        >
+          <EllipsisVertical className="h-3.5 w-3.5" />
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+            <div className="absolute right-0 top-6 z-20 w-28 rounded-md border border-border bg-paper py-1 shadow-md">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onStartRename()
+                }}
+                className="flex w-full items-center gap-2 px-2.5 py-1 text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
+              >
+                <Pencil className="h-3 w-3" />
+                {t('sandbox.templateRename')}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen(false)
+                  onDelete()
+                }}
+                className="flex w-full items-center gap-2 px-2.5 py-1 text-xs text-red-500 hover:bg-red-50"
+              >
+                <Trash2 className="h-3 w-3" />
+                {t('sandbox.templateDelete')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }

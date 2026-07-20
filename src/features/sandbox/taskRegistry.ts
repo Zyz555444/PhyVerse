@@ -304,7 +304,7 @@ export function getTaskById(id: string): SandboxTask | undefined {
 function getSampleMetric(sample: TelemetrySample, metric: TaskObjectiveMetric): number {
   switch (metric) {
     case 'accelY':
-      return Math.abs(sample.accel)
+      return Math.abs(sample.accelY)
     case 'speed':
       return sample.speed
     case 'ke':

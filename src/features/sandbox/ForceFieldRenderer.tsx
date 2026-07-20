@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { Sphere, Ring } from '@react-three/drei'
 import * as THREE from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
-import { useSandboxStore } from '@/features/sandbox/sandboxStore'
+import { useSandboxStore, getForceFieldType, getForceFieldStrength } from '@/features/sandbox/sandboxStore'
 
 const FORCE_FIELD_COLOR = '#8b5cf6'
 const FORCE_SCALE = 50
@@ -23,15 +23,16 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
     if (!isRunning || !world?.isReady || forceFields.length === 0) return
 
     const dynamicItems = items.filter((it) => it.isDynamic)
+    if (dynamicItems.length === 0) return
     const scaledDt = delta * timeScale
 
     for (const field of forceFields) {
       const [fx, fy, fz] = field.position
       const fieldRadius = field.size[0] / 2
-      const fieldStrength = field.mass > 0 ? field.mass : 10
+      const fieldStrength = getForceFieldStrength(field)
 
-      // Store the field type: positive = repulsive, negative = attractive
-      const fieldType = field.friction > 0.5 ? 'repulsive' : 'attractive'
+      // Store the field type
+      const fieldType = getForceFieldType(field)
 
       for (const dynItem of dynamicItems) {
         const record = world.getBody(dynItem.id)
@@ -43,22 +44,23 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
         const dz = pos.z - fz
         const dist = Math.hypot(dx, dy, dz)
 
-        if (dist < fieldRadius && dist > 0.01) {
-          const dir = new THREE.Vector3(dx, dy, dz).normalize()
-          // Force magnitude: inverse square law within field radius
-          const forceMag = (fieldStrength / (dist * dist)) * FORCE_SCALE * scaledDt
+        // Early-out: skip if outside field radius
+        if (dist >= fieldRadius || dist < 0.01) continue
 
-          if (fieldType === 'repulsive') {
-            record.rigidBody.applyImpulse(
-              { x: dir.x * forceMag, y: dir.y * forceMag, z: dir.z * forceMag },
-              true
-            )
-          } else {
-            record.rigidBody.applyImpulse(
-              { x: -dir.x * forceMag, y: -dir.y * forceMag, z: -dir.z * forceMag },
-              true
-            )
-          }
+        const dir = new THREE.Vector3(dx, dy, dz).normalize()
+        // Force magnitude: inverse square law within field radius
+        const forceMag = (fieldStrength / (dist * dist)) * FORCE_SCALE * scaledDt
+
+        if (fieldType === 'repulsive') {
+          record.rigidBody.applyImpulse(
+            { x: dir.x * forceMag, y: dir.y * forceMag, z: dir.z * forceMag },
+            true
+          )
+        } else {
+          record.rigidBody.applyImpulse(
+            { x: -dir.x * forceMag, y: -dir.y * forceMag, z: -dir.z * forceMag },
+            true
+          )
         }
       }
     }
@@ -71,7 +73,7 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
       {forceFields.map((field, _i) => {
         const [x, y, z] = field.position
         const radius = field.size[0] / 2
-        const isAttractive = field.friction <= 0.5
+        const isAttractive = getForceFieldType(field) === 'attract'
 
         return (
           <group key={field.id}>

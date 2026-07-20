@@ -22,6 +22,7 @@ const SANDBOX_SHAPES: SandboxShape[] = [
   'slope',
   'barrier',
   'force_meter',
+  'force_field',
 ]
 
 const JOINT_TYPES = ['spring', 'fixed', 'rope', 'revolute', 'prismatic', 'motor', 'gear'] as const
@@ -32,6 +33,12 @@ export interface VersionedScene extends SandboxScene {
 
 export interface ImportSceneResult {
   scene: SandboxScene
+  metadata?: {
+    name?: string
+    createdAt?: string
+    itemCount?: number
+    jointCount?: number
+  }
 }
 
 export interface ImportSceneError {
@@ -153,7 +160,36 @@ export function loadStoredScene(): SandboxScene | null {
 
 export function exportScene(scene: SandboxScene): void {
   if (typeof window === 'undefined') return
-  const payload: VersionedScene = { version: CURRENT_VERSION, ...scene }
+
+  // Anonymize item IDs: map original UUIDs to generic ids like "item-1", "item-2"
+  const idMap = new Map<string, string>()
+  const anonymizedItems = scene.items.map((item, i) => {
+    const newId = `item-${i + 1}`
+    idMap.set(item.id, newId)
+    return { ...item, id: newId }
+  })
+
+  // Anonymize joint references
+  const anonymizedJoints = (scene.joints ?? []).map((j) => ({
+    ...j,
+    id: idMap.get(j.id) ?? j.id,
+    bodyA: idMap.get(j.bodyA) ?? j.bodyA,
+    bodyB: idMap.get(j.bodyB) ?? j.bodyB,
+  }))
+
+  const payload = {
+    version: CURRENT_VERSION,
+    metadata: {
+      name: `PhyVerse Scene`,
+      createdAt: new Date().toISOString(),
+      itemCount: scene.items.length,
+      jointCount: (scene.joints ?? []).length,
+    },
+    gravity: scene.gravity,
+    items: anonymizedItems,
+    joints: anonymizedJoints.length > 0 ? anonymizedJoints : undefined,
+  }
+
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   try {
@@ -219,7 +255,7 @@ function createImportError(reason: ImportSceneError['reason'], message: string):
   return error
 }
 
-export async function importScene(file: File): Promise<SandboxScene> {
+export async function importScene(file: File): Promise<ImportSceneResult> {
   let text: string
   try {
     text = await file.text()
@@ -232,6 +268,20 @@ export async function importScene(file: File): Promise<SandboxScene> {
     parsed = JSON.parse(text)
   } catch {
     throw createImportError('parse', '文件不是有效的 JSON')
+  }
+
+  // Extract metadata if present (new format)
+  let metadata: ImportSceneResult['metadata']
+  if (parsed && typeof parsed === 'object' && 'metadata' in parsed) {
+    const meta = (parsed as { metadata?: Record<string, unknown> }).metadata
+    if (meta && typeof meta === 'object') {
+      metadata = {
+        name: typeof meta.name === 'string' ? meta.name : undefined,
+        createdAt: typeof meta.createdAt === 'string' ? meta.createdAt : undefined,
+        itemCount: typeof meta.itemCount === 'number' ? meta.itemCount : undefined,
+        jointCount: typeof meta.jointCount === 'number' ? meta.jointCount : undefined,
+      }
+    }
   }
 
   const scene = migrateScene(parsed)
@@ -252,5 +302,27 @@ export async function importScene(file: File): Promise<SandboxScene> {
     throw createImportError('structure', '场景文件格式不正确')
   }
 
-  return scene
+  // Remap anonymized IDs to fresh unique IDs to avoid conflicts with existing items
+  const idMap = new Map<string, string>()
+  const remappedItems = scene.items.map((item) => {
+    const newId = crypto.randomUUID?.() ?? `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    idMap.set(item.id, newId)
+    return { ...item, id: newId }
+  })
+
+  const remappedJoints = (scene.joints ?? []).map((j) => ({
+    ...j,
+    id: idMap.get(j.id) ?? j.id,
+    bodyA: idMap.get(j.bodyA) ?? j.bodyA,
+    bodyB: idMap.get(j.bodyB) ?? j.bodyB,
+  }))
+
+  return {
+    scene: {
+      gravity: scene.gravity,
+      items: remappedItems,
+      joints: remappedJoints,
+    },
+    metadata,
+  }
 }

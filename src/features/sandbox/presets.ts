@@ -271,11 +271,11 @@ export const rampPreset: SandboxScene = {
   ],
 }
 
-export const SANDBOX_PRESETS: { id: string; label: string; scene: SandboxScene }[] = [
-  { id: 'stacked-boxes', label: '堆叠方块', scene: stackedBoxesPreset },
-  { id: 'slope-ball', label: '斜坡滚球', scene: slopeBallPreset },
-  { id: 'spring-pendulum', label: '弹簧摆', scene: springPendulumPreset },
-  { id: 'collision', label: '双球碰撞', scene: collisionPreset },
-  { id: 'newton-cradle', label: '牛顿摆', scene: newtonCradlePreset },
-  { id: 'ramp', label: '斜面下滑', scene: rampPreset },
+export const SANDBOX_PRESETS: { id: string; label: string; labelKey: string; scene: SandboxScene }[] = [
+  { id: 'stacked-boxes', label: '堆叠方块', labelKey: 'sandbox.presets.stackedBoxes', scene: stackedBoxesPreset },
+  { id: 'slope-ball', label: '斜坡滚球', labelKey: 'sandbox.presets.slopeBall', scene: slopeBallPreset },
+  { id: 'spring-pendulum', label: '弹簧摆', labelKey: 'sandbox.presets.springPendulum', scene: springPendulumPreset },
+  { id: 'collision', label: '双球碰撞', labelKey: 'sandbox.presets.collision', scene: collisionPreset },
+  { id: 'newton-cradle', label: '牛顿摆', labelKey: 'sandbox.presets.newtonCradle', scene: newtonCradlePreset },
+  { id: 'ramp', label: '斜面下滑', labelKey: 'sandbox.presets.ramp', scene: rampPreset },
 ]

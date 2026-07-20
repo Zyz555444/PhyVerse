@@ -242,10 +242,12 @@ function SlopeGeometry({
   width,
   thickness,
   depth,
+  rotationZ = 0,
 }: {
   width: number
   thickness: number
   depth: number
+  rotationZ?: number
 }) {
   const boardGeo = useMemo(() => {
     const geo = new THREE.BoxGeometry(width, thickness, depth)
@@ -271,6 +273,56 @@ function SlopeGeometry({
     return group
   }, [width, thickness, depth])
 
+  // Angle indicator: draw a small arc at the base showing the slope angle
+  const angleIndicator = useMemo(() => {
+    if (Math.abs(rotationZ) < 0.001) return null
+    const indicator = new THREE.Group()
+    const arcRadius = width * 0.35
+    const arcSegments = 12
+    const points: [number, number, number][] = []
+
+    // Draw an arc from 0 to -rotationZ (since slope rotates clockwise)
+    const angle = -rotationZ
+    for (let i = 0; i <= arcSegments; i++) {
+      const a = (i / arcSegments) * angle
+      points.push([-arcRadius, Math.sin(a) * arcRadius, Math.cos(a) * arcRadius - depth * 0.6])
+    }
+    // Ground reference line
+    points.unshift([-width * 0.38, 0, -depth * 0.6])
+
+    // Create the lines using simple mesh approach
+    // Use a thin box for the ground line
+    const groundLine = new THREE.Mesh(
+      new THREE.BoxGeometry(0.02, 0.01, arcRadius),
+      new THREE.MeshBasicMaterial({ color: 0x3b82f6 })
+    )
+    groundLine.position.set(-width * 0.45, 0.01, -depth * 0.6 + arcRadius / 2)
+    indicator.add(groundLine)
+
+    // Slope direction line
+    const slopeLen = arcRadius
+    const slopeLine = new THREE.Mesh(
+      new THREE.BoxGeometry(0.02, 0.01, slopeLen),
+      new THREE.MeshBasicMaterial({ color: 0x3b82f6 })
+    )
+    slopeLine.position.set(-width * 0.45 + arcRadius / 2, arcRadius / 2 * Math.sin(angle), -depth * 0.6 + arcRadius / 2 * Math.cos(angle))
+    slopeLine.rotation.set(-angle, 0, 0)
+    indicator.add(slopeLine)
+
+    // Angle arc marker
+    for (let i = 0; i <= arcSegments; i += 2) {
+      const a = (i / arcSegments) * angle
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.015, 4, 4),
+        new THREE.MeshBasicMaterial({ color: i === 0 || i === arcSegments ? 0x2563eb : 0x93c5fd })
+      )
+      dot.position.set(-width * 0.45, Math.sin(a) * arcRadius + 0.01, Math.cos(a) * arcRadius - depth * 0.6)
+      indicator.add(dot)
+    }
+
+    return indicator
+  }, [width, depth, rotationZ])
+
   useEffect(() => {
     return () => {
       boardGeo.dispose()
@@ -293,6 +345,7 @@ function SlopeGeometry({
         <meshStandardMaterial color="#d4c8a8" roughness={0.8} />
       </mesh>
       <primitive object={tickGroup} />
+      {angleIndicator && <primitive object={angleIndicator} />}
     </group>
   )
 }
@@ -592,6 +645,10 @@ export function SandboxItemRenderer({
   }, [item.id, item.position, item.rotation, item.scale, editingEnabled])
 
   // Each frame: running -> read physics to mesh; editing -> write mesh to kinematic body.
+  // Cache transform values to avoid unnecessary Rapier API calls when nothing changed.
+  const prevTranslation = useRef(new THREE.Vector3())
+  const prevRotation = useRef(new THREE.Quaternion())
+
   useFrame(() => {
     const body = bodyRef.current
     if (!body) return
@@ -601,19 +658,29 @@ export function SandboxItemRenderer({
     const rb = body.rigidBody
 
     if (editingEnabled) {
-      rb.setTranslation(
-        { x: meshNode.position.x, y: meshNode.position.y, z: meshNode.position.z },
-        true
-      )
-      rb.setRotation(
-        {
-          x: meshNode.quaternion.x,
-          y: meshNode.quaternion.y,
-          z: meshNode.quaternion.z,
-          w: meshNode.quaternion.w,
-        },
-        true
-      )
+      const worldPos = meshNode.position
+      const worldQuat = meshNode.quaternion
+      if (!worldPos.equals(prevTranslation.current)) {
+        rb.setTranslation({ x: worldPos.x, y: worldPos.y, z: worldPos.z }, true)
+        prevTranslation.current.copy(worldPos)
+      }
+      if (
+        worldQuat.x !== prevRotation.current.x ||
+        worldQuat.y !== prevRotation.current.y ||
+        worldQuat.z !== prevRotation.current.z ||
+        worldQuat.w !== prevRotation.current.w
+      ) {
+        rb.setRotation(
+          {
+            x: worldQuat.x,
+            y: worldQuat.y,
+            z: worldQuat.z,
+            w: worldQuat.w,
+          },
+          true
+        )
+        prevRotation.current.copy(worldQuat)
+      }
     } else {
       const pos = rb.translation()
       const rot = rb.rotation()
@@ -682,7 +749,7 @@ export function SandboxItemRenderer({
               <PulleyGeometry radius={item.size[0] / 2} thickness={item.size[2]} />
             )}
             {item.shape === 'slope' && (
-              <SlopeGeometry width={item.size[0]} thickness={item.size[1]} depth={item.size[2]} />
+              <SlopeGeometry width={item.size[0]} thickness={item.size[1]} depth={item.size[2]} rotationZ={item.rotation[2]} />
             )}
             {item.shape === 'barrier' && (
               <BarrierGeometry

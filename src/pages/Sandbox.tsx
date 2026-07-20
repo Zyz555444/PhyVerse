@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { useIsMobile } from '@/shared/hooks/useIsMobile'
 import { MobileBottomSheet } from '@/shared/ui/MobileBottomSheet'
 import { Scene } from '@/features/canvas/Scene'
 import { PhysicsProvider } from '@/features/physics/PhysicsProvider'
-import { usePhysics } from '@/features/physics/usePhysics'
 import {
   useSandboxStore,
   type SandboxScene,
-  type SandboxCameraView,
   type JointType,
-  type TelemetrySample,
 } from '@/features/sandbox/sandboxStore'
 import { EquipmentPalette } from '@/features/sandbox/EquipmentPalette'
 import { PropertiesPanel } from '@/features/sandbox/PropertiesPanel'
@@ -25,8 +20,6 @@ import { SceneContextMenu } from '@/features/sandbox/SceneContextMenu'
 import { SceneHierarchyPanel } from '@/features/sandbox/SceneHierarchyPanel'
 import { HelpOverlay } from '@/features/sandbox/HelpOverlay'
 import { DataPanel } from '@/features/sandbox/DataPanel'
-import { getFriendlyName } from '@/features/sandbox/friendlyName'
-import { SANDBOX_PRESETS } from '@/features/sandbox/presets'
 import { useSandboxShortcuts } from '@/features/sandbox/useSandboxShortcuts'
 import {
   saveScene,
@@ -34,6 +27,8 @@ import {
   exportScene,
   importScene,
 } from '@/features/sandbox/sceneStorage'
+import { saveTemplate } from '@/features/sandbox/sceneTemplates'
+import { SANDBOX_PRESETS } from '@/features/sandbox/presets'
 import { TaskPanel } from '@/features/sandbox/TaskPanel'
 import { useTaskMonitor } from '@/features/sandbox/useTaskMonitor'
 import { RecorderSampler } from '@/features/recording/RecorderSampler'
@@ -51,209 +46,13 @@ import { MeasurementDataCollector } from '@/features/measurement/measurementData
 import { MeasurementToolbar } from '@/features/measurement/MeasurementToolbar'
 import { CloudSyncPanel } from '@/features/cloud/CloudSyncPanel'
 import { type SandboxTask } from '@/features/sandbox/taskRegistry'
-import { Button } from '@/shared/ui/Button'
+import { ManualStepper } from '@/features/sandbox/components/ManualStepper'
+import { ImpulseApplier } from '@/features/sandbox/components/ImpulseApplier'
+import { TelemetrySampler } from '@/features/sandbox/components/TelemetrySampler'
+import { SandboxToolbar } from '@/features/sandbox/components/SandboxToolbar'
+import { SandboxStatusBar } from '@/features/sandbox/components/SandboxStatusBar'
 import { cn } from '@/shared/utils/cn'
-import {
-  Download,
-  Upload,
-  Play,
-  Pause,
-  RotateCcw,
-  Trash2,
-  Copy,
-  ClipboardCopy,
-  ClipboardPaste,
-  Eraser,
-  Check,
-  Magnet,
-  Camera,
-  X,
-  Maximize2,
-  Minimize2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  Link2,
-  Undo2,
-  Redo2,
-  SkipForward,
-  Crosshair,
-  Zap,
-  HelpCircle,
-  Route,
-  Sparkles,
-  Box as BoxIcon,
-  Eye,
-  EyeOff,
-  Lock,
-  BarChart3,
-  Cloud,
-  Menu,
-} from 'lucide-react'
-
-const CAMERA_VIEWS: SandboxCameraView[] = ['free', 'top', 'front', 'side']
-
-const JOINT_TYPES: { type: JointType; labelKey: string }[] = [
-  { type: 'spring', labelKey: 'sandbox.shape.spring' },
-  { type: 'rope', labelKey: 'sandbox.jointRope' },
-  { type: 'fixed', labelKey: 'sandbox.jointFixed' },
-  { type: 'revolute', labelKey: 'sandbox.jointRevolute' },
-  { type: 'prismatic', labelKey: 'sandbox.jointPrismatic' },
-  { type: 'motor', labelKey: 'sandbox.jointMotor' },
-  { type: 'gear', labelKey: 'sandbox.jointGear' },
-]
-
-function ManualStepper() {
-  const { world } = usePhysics()
-  const stepRequested = useSandboxStore((s) => s.stepRequested)
-  const lastSeenRef = useRef(stepRequested)
-
-  useFrame(() => {
-    if (stepRequested !== lastSeenRef.current) {
-      lastSeenRef.current = stepRequested
-      if (world && world.isReady) {
-        world.step()
-      }
-    }
-  })
-  return null
-}
-
-/** Applies pending impulse requests from the store to physics bodies. */
-function ImpulseApplier() {
-  const { world } = usePhysics()
-  const pendingImpulse = useSandboxStore((s) => s.pendingImpulse)
-  const clearPendingImpulse = useSandboxStore((s) => s.clearPendingImpulse)
-
-  useFrame(() => {
-    if (!pendingImpulse || !world?.isReady) return
-    const record = world.getBody(pendingImpulse.itemId)
-    if (record) {
-      const [x, y, z] = pendingImpulse.impulse
-      record.rigidBody.applyImpulse({ x, y, z }, true)
-    }
-    clearPendingImpulse()
-  })
-
-  return null
-}
-
-/**
- * Samples physics state of the tracked body each frame and feeds it into the
- * telemetry store. Live readings update ~10Hz; historical samples flush ~30Hz.
- */
-function TelemetrySampler({ isRunning }: { isRunning: boolean }) {
-  const { world } = usePhysics()
-  const trackedId = useSandboxStore((s) => s.telemetry.trackedId)
-  const sampling = useSandboxStore((s) => s.telemetry.sampling)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const items = useSandboxStore((s) => s.items)
-  const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
-  const pushSamples = useSandboxStore((s) => s.pushTelemetrySamples)
-  const setLive = useSandboxStore((s) => s.setLiveReading)
-
-  const sampleBufferRef = useRef<TelemetrySample[]>([])
-  const liveAccumRef = useRef(0)
-  const pushAccumRef = useRef(0)
-  const simTimeRef = useRef(0)
-  const prevVelRef = useRef(new THREE.Vector3())
-  const hasPrevRef = useRef(false)
-  const lastTrackedRef = useRef<string | null>(null)
-
-  // Reset local timing state when sampling toggles or tracked target changes.
-  useEffect(() => {
-    simTimeRef.current = 0
-    hasPrevRef.current = false
-    sampleBufferRef.current = []
-    pushAccumRef.current = 0
-  }, [sampling, trackedId])
-
-  useFrame((_, delta) => {
-    if (!isRunning || !world?.isReady || !trackedId) return
-    const record = world.getBody(trackedId)
-    if (!record) return
-    const item = items.find((it) => it.id === trackedId)
-    if (!item) return
-
-    if (lastTrackedRef.current !== trackedId) {
-      hasPrevRef.current = false
-      lastTrackedRef.current = trackedId
-    }
-
-    const scaledDelta = delta * timeScale
-    simTimeRef.current += scaledDelta
-
-    const rb = record.rigidBody
-    const pos = rb.translation()
-    const v = rb.linvel()
-    const speed = Math.hypot(v.x, v.y, v.z)
-    const mass = item.mass
-
-    let accel = 0
-    if (hasPrevRef.current && scaledDelta > 0) {
-      const ax = (v.x - prevVelRef.current.x) / scaledDelta
-      const ay = (v.y - prevVelRef.current.y) / scaledDelta
-      const az = (v.z - prevVelRef.current.z) / scaledDelta
-      accel = Math.hypot(ax, ay, az)
-    }
-    prevVelRef.current.set(v.x, v.y, v.z)
-    hasPrevRef.current = true
-
-    const ke = 0.5 * mass * speed * speed
-    const pe = mass * Math.abs(gravity[1]) * Math.max(0, pos.y)
-
-    const sample: TelemetrySample = {
-      t: simTimeRef.current,
-      pos: [pos.x, pos.y, pos.z],
-      vel: [v.x, v.y, v.z],
-      speed,
-      accel,
-      ke,
-      pe,
-    }
-
-    liveAccumRef.current += delta
-    if (liveAccumRef.current >= 0.1) {
-      setLive(sample)
-      liveAccumRef.current = 0
-    }
-
-    if (sampling) {
-      sampleBufferRef.current.push(sample)
-      pushAccumRef.current += scaledDelta
-      if (pushAccumRef.current >= 0.033) {
-        pushSamples(sampleBufferRef.current, pushAccumRef.current)
-        sampleBufferRef.current = []
-        pushAccumRef.current = 0
-      }
-    }
-  })
-
-  return null
-}
-
-function useFps(): number {
-  const [fps, setFps] = useState(0)
-  useEffect(() => {
-    let frames = 0
-    let raf = 0
-    let last = performance.now()
-    const tick = () => {
-      frames++
-      const now = performance.now()
-      if (now - last >= 1000) {
-        setFps(frames)
-        frames = 0
-        last = now
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-  return fps
-}
+import { Check, X } from 'lucide-react'
 
 export function Sandbox() {
   const { t } = useI18n()
@@ -262,7 +61,6 @@ export function Sandbox() {
   const gravity = useSandboxStore((s) => s.gravity)
   const selectedId = useSandboxStore((s) => s.selectedId)
   const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
-  const clipboard = useSandboxStore((s) => s.clipboard)
   const isGizmoDragging = useSandboxStore((s) => s.isGizmoDragging)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const ui = useSandboxStore((s) => s.ui)
@@ -328,7 +126,6 @@ export function Sandbox() {
   const showTrajectory = editorConfig.showTrajectory
   const showForceVectors = editorConfig.showForceVectors
   const showEnergyBar = editorConfig.showEnergyBar
-  const fps = useFps()
 
   const physicsConfig = useMemo(() => ({ gravity }), [gravity])
 
@@ -445,8 +242,8 @@ export function Sandbox() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const scene = await importScene(file)
-      loadScene(scene)
+      const result = await importScene(file)
+      loadScene(result.scene)
       setImportError(null)
     } catch (error) {
       setImportError(error instanceof Error ? error.message : t('sandbox.importError'))
@@ -459,6 +256,13 @@ export function Sandbox() {
     if (window.confirm(t('sandbox.clearConfirm'))) {
       clearScene()
     }
+  }
+
+  const handleSaveTemplate = () => {
+    const name = window.prompt(t('sandbox.templateSaveTitle'), '')?.trim()
+    if (!name) return
+    saveTemplate(name, { items, gravity, joints })
+    alert(t('sandbox.templateSaved'))
   }
 
   const handleCreateJoint = (type: JointType) => {
@@ -583,23 +387,6 @@ export function Sandbox() {
     URL.revokeObjectURL(url)
   }
 
-  const canCreateJoint = [selectedId, ...multiSelectedIds].filter(Boolean).length >= 2
-
-  const friendlyName = useMemo(() => {
-    if (!selectedId) return ''
-    return getFriendlyName(items, selectedId)
-  }, [items, selectedId])
-
-  const selectedCount = [selectedId, ...multiSelectedIds].filter(Boolean).length
-  const selectedLockedCount = useMemo(() => {
-    const ids = [selectedId, ...multiSelectedIds].filter(Boolean) as string[]
-    return ids.filter((id) => items.find((it) => it.id === id)?.locked).length
-  }, [items, selectedId, multiSelectedIds])
-  const selectedHiddenCount = useMemo(() => {
-    const ids = [selectedId, ...multiSelectedIds].filter(Boolean) as string[]
-    return ids.filter((id) => items.find((it) => it.id === id)?.hidden).length
-  }, [items, selectedId, multiSelectedIds])
-
   const focusTarget = useMemo<[number, number, number] | undefined>(() => {
     if (!selectedId) return undefined
     const item = items.find((it) => it.id === selectedId)
@@ -614,7 +401,7 @@ export function Sandbox() {
   const centerOpen = !isMobile && ui.isRightPanelOpen
   const aiOpen = !isMobile && ui.isAiPanelOpen
   const [mobileSheet, setMobileSheet] = useState<
-    'equipment' | 'tasks' | 'hierarchy' | 'properties' | null
+    'equipment' | 'tasks' | 'hierarchy' | 'properties' | 'data' | 'ai' | null
   >(null)
 
   const containerClass = useMemo(() => {
@@ -626,436 +413,35 @@ export function Sandbox() {
 
   return (
     <div className={containerClass}>
-      {/* Toolbar */}
-      <div
-        className={cn(
-          'mb-2 flex items-center gap-2',
-          isMobile ? 'overflow-x-auto flex-nowrap' : 'flex-wrap',
-          isFullscreen && 'px-1 pt-1'
-        )}
-      >
-        {/* Title + Playback */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {!isFullscreen && !isMobile && (
-            <h1 className="font-heading text-xl text-text-primary">{t('nav.sandbox')}</h1>
-          )}
-          <Button
-            size="sm"
-            variant={isPlaying ? 'primary' : isRunning ? 'secondary' : 'primary'}
-            onClick={() => {
-              if (isPlaying) return
-              setRunning(!isRunning)
-            }}
-            disabled={isPlaying}
-            leftIcon={
-              isPlaying ? (
-                <Play className="h-3.5 w-3.5" />
-              ) : isRunning ? (
-                <Pause className="h-3.5 w-3.5" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )
-            }
-          >
-            {isPlaying ? t('sandbox.playing') : isRunning ? t('sandbox.pause') : t('sandbox.run')}
-          </Button>
-        </div>
+      <SandboxToolbar
+        isFullscreen={isFullscreen}
+        isMobile={isMobile}
+        cameraResetKey={cameraResetKey}
+        cloudOpen={cloudOpen}
+        sceneMenuOpen={sceneMenuOpen}
+        showJointMenu={showJointMenu}
+        showPresetMenu={showPresetMenu}
+        sceneMenuRef={sceneMenuRef}
+        jointMenuRef={jointMenuRef}
+        presetMenuRef={presetMenuRef}
+        fileInputRef={fileInputRef}
+        mobileSheet={mobileSheet}
+        setCameraResetKey={setCameraResetKey}
+        setCameraFocusKey={setCameraFocusKey}
+        setCloudOpen={setCloudOpen}
+        setSceneMenuOpen={setSceneMenuOpen}
+        setShowJointMenu={setShowJointMenu}
+        setShowPresetMenu={setShowPresetMenu}
+        setMobileSheet={setMobileSheet}
+        onImportClick={handleImportClick}
+        onExport={handleExport}
+        onSaveTemplate={handleSaveTemplate}
+        onClear={handleClear}
+        onCreateJoint={handleCreateJoint}
+        handleFileChange={handleFileChange}
+      />
 
-        <div className="flex items-center gap-1">
-          <ToolButton
-            icon={SkipForward}
-            onClick={requestStep}
-            title={t('sandbox.step')}
-            disabled={isRunning}
-            size="sm"
-          />
-          <ToolButton icon={Undo2} onClick={undo} title={t('sandbox.undo')} size="sm" />
-          <ToolButton icon={Redo2} onClick={redo} title={t('sandbox.redo')} size="sm" />
-        </div>
-
-        <Divider />
-
-        {/* Edit / simulation controls */}
-        {!isRunning && selectedId && (
-          <div className="flex items-center gap-1">
-            <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
-              {(
-                [
-                  ['translate', 'sandbox.gizmoTranslate'],
-                  ['rotate', 'sandbox.gizmoRotate'],
-                  ['scale', 'sandbox.gizmoScale'],
-                ] as const
-              ).map(([mode, labelKey]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setEditorConfig({ gizmoMode: mode })}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-xs font-medium transition-colors',
-                    gizmoMode === mode
-                      ? 'bg-accent-soft text-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                  )}
-                >
-                  {t(labelKey)}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setEditorConfig({ gizmoSpace: gizmoSpace === 'world' ? 'local' : 'world' })
-              }
-              title={t(gizmoSpace === 'world' ? 'sandbox.gizmoWorld' : 'sandbox.gizmoLocal')}
-              className="rounded-lg border border-border bg-paper px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary"
-            >
-              {gizmoSpace === 'world' ? 'W' : 'L'}
-            </button>
-          </div>
-        )}
-
-        {isRunning && (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-paper px-2 py-1">
-            <ToolButton
-              icon={Zap}
-              onClick={() => setEditorConfig({ impulseMode: !impulseMode })}
-              title={t('sandbox.impulseMode')}
-              active={impulseMode}
-            />
-            {impulseMode && (
-              <>
-                <span className="text-xs text-text-secondary">{t('sandbox.impulseStrength')}</span>
-                <input
-                  type="range"
-                  min={1}
-                  max={20}
-                  step={0.5}
-                  value={impulseStrength}
-                  onChange={(e) => setEditorConfig({ impulseStrength: Number(e.target.value) })}
-                  className="h-1.5 w-16 cursor-pointer appearance-none rounded-full bg-paper-tertiary accent-accent"
-                />
-                <span className="w-8 text-right text-xs font-mono text-text-secondary">
-                  {impulseStrength.toFixed(1)}
-                </span>
-              </>
-            )}
-            <ToolButton
-              icon={Route}
-              onClick={() => setEditorConfig({ showTrajectory: !showTrajectory })}
-              title={t('sandbox.trajectory')}
-              active={showTrajectory}
-            />
-            <ToolButton
-              icon={Eye}
-              onClick={() => setEditorConfig({ showForceVectors: !showForceVectors })}
-              title={t('sandbox.forceVectors')}
-              active={showForceVectors}
-            />
-            <ToolButton
-              icon={BarChart3}
-              onClick={() => setEditorConfig({ showEnergyBar: !showEnergyBar })}
-              title={t('sandbox.energyBar')}
-              active={showEnergyBar}
-            />
-          </div>
-        )}
-
-        <ToolButton
-          icon={Magnet}
-          onClick={() => setEditorConfig({ snapEnabled: !editorConfig.snapEnabled })}
-          title={t('sandbox.snap')}
-          active={editorConfig.snapEnabled}
-        />
-
-        <Divider />
-
-        {/* View controls */}
-        <div className="flex items-center rounded-lg border border-border bg-paper p-0.5">
-          <Camera className="ml-1.5 mr-0.5 h-3.5 w-3.5 text-text-tertiary" />
-          {CAMERA_VIEWS.map((view) => (
-            <button
-              key={view}
-              type="button"
-              onClick={() => setEditorConfig({ cameraView: view })}
-              className={cn(
-                'rounded-md px-1.5 py-1 text-xs font-medium transition-colors',
-                editorConfig.cameraView === view
-                  ? 'bg-accent-soft text-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-              )}
-            >
-              {t(`sandbox.view${view.charAt(0).toUpperCase() + view.slice(1)}`)}
-            </button>
-          ))}
-        </div>
-
-        <ToolButton
-          icon={Camera}
-          onClick={() => setCameraResetKey((k) => k + 1)}
-          title={t('sandbox.cameraReset')}
-        />
-        <ToolButton
-          icon={Crosshair}
-          onClick={() => setCameraFocusKey((k) => k + 1)}
-          title={t('sandbox.focusSelected')}
-          disabled={!selectedId}
-        />
-
-        <Divider />
-
-        {/* Time scale */}
-        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-paper px-2 py-1">
-          <span className="text-xs text-text-secondary">{t('sandbox.timeScale')}</span>
-          <input
-            type="range"
-            min={0}
-            max={2}
-            step={0.1}
-            value={editorConfig.timeScale}
-            onChange={(e) => setEditorConfig({ timeScale: Number(e.target.value) })}
-            className="h-1.5 w-16 cursor-pointer appearance-none rounded-full bg-paper-tertiary accent-accent"
-          />
-          <span className="w-8 text-right text-xs font-mono text-text-secondary">
-            {editorConfig.timeScale.toFixed(1)}x
-          </span>
-        </div>
-
-        <div className="ml-auto flex items-center gap-1">
-          {/* Edit clipboard */}
-          <div className="flex items-center gap-1">
-            <ToolButton
-              icon={Copy}
-              onClick={() => selectedId && duplicateItem(selectedId)}
-              title={t('sandbox.duplicate')}
-              disabled={!selectedId}
-            />
-            <ToolButton
-              icon={ClipboardCopy}
-              onClick={() => selectedId && copyItem(selectedId)}
-              title={t('sandbox.copy')}
-              disabled={!selectedId}
-            />
-            <ToolButton
-              icon={ClipboardPaste}
-              onClick={() => pasteItem()}
-              title={t('sandbox.paste')}
-              disabled={!clipboard || clipboard.length === 0}
-            />
-            <ToolButton
-              icon={Trash2}
-              onClick={() => selectedId && removeItem(selectedId)}
-              title={t('sandbox.delete')}
-              disabled={!selectedId}
-            />
-          </div>
-
-          <Divider />
-
-          {/* Joint creation */}
-          <div className="relative" ref={jointMenuRef}>
-            <ToolButton
-              icon={Link2}
-              onClick={() => canCreateJoint && setShowJointMenu((s) => !s)}
-              title={canCreateJoint ? t('sandbox.createJoint') : t('sandbox.createJointHint')}
-              disabled={!canCreateJoint}
-            />
-            {showJointMenu && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-lg border border-border bg-paper py-1 shadow-lg">
-                {JOINT_TYPES.map(({ type, labelKey }) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handleCreateJoint(type)}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
-                  >
-                    <Link2 className="h-3 w-3" />
-                    {t(labelKey)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <Divider />
-
-          {/* Scene menu */}
-          <div className="relative" ref={sceneMenuRef}>
-            <ToolButton
-              icon={Menu}
-              onClick={() => setSceneMenuOpen((s) => !s)}
-              title={t('sandbox.sceneMenu')}
-              active={sceneMenuOpen}
-            />
-            {sceneMenuOpen && (
-              <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-paper py-1 shadow-lg">
-                <SceneMenuItem
-                  icon={Upload}
-                  label={t('sandbox.import')}
-                  onClick={() => {
-                    handleImportClick()
-                    setSceneMenuOpen(false)
-                  }}
-                />
-                <SceneMenuItem
-                  icon={Download}
-                  label={t('sandbox.export')}
-                  onClick={() => {
-                    handleExport()
-                    setSceneMenuOpen(false)
-                  }}
-                />
-                <SceneMenuItem
-                  icon={Cloud}
-                  label={t('cloud.title')}
-                  active={cloudOpen}
-                  onClick={() => {
-                    setCloudOpen((open) => !open)
-                    setSceneMenuOpen(false)
-                  }}
-                />
-                <div className="my-1 h-px bg-border" />
-                <div className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-text-tertiary">
-                  {t('sandbox.presets')}
-                </div>
-                {SANDBOX_PRESETS.map(({ id, label, scene }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(t('sandbox.presetConfirm', { name: label }))) {
-                        loadScene(scene)
-                      }
-                      setSceneMenuOpen(false)
-                    }}
-                    className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
-                  >
-                    {label}
-                  </button>
-                ))}
-                <div className="my-1 h-px bg-border" />
-                <SceneMenuItem
-                  icon={Eraser}
-                  label={t('sandbox.clear')}
-                  disabled={items.length === 0}
-                  onClick={() => {
-                    handleClear()
-                    setSceneMenuOpen(false)
-                  }}
-                />
-                <SceneMenuItem
-                  icon={RotateCcw}
-                  label={t('sandbox.reset')}
-                  onClick={() => {
-                    resetScene()
-                    setSceneMenuOpen(false)
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-
-          <Divider />
-
-          {isMobile && (
-            <>
-              <ToolButton
-                icon={BoxIcon}
-                onClick={() => setMobileSheet(mobileSheet === 'equipment' ? null : 'equipment')}
-                title={t('sandbox.equipment')}
-                active={mobileSheet === 'equipment'}
-              />
-              <ToolButton
-                icon={PanelLeftOpen}
-                onClick={() => setMobileSheet(mobileSheet === 'hierarchy' ? null : 'hierarchy')}
-                title={t('sandbox.hierarchy')}
-                active={mobileSheet === 'hierarchy'}
-              />
-              <ToolButton
-                icon={PanelRightOpen}
-                onClick={() => setMobileSheet(mobileSheet === 'properties' ? null : 'properties')}
-                title={t('sandbox.properties')}
-                active={mobileSheet === 'properties'}
-              />
-            </>
-          )}
-
-          <ToolButton
-            icon={HelpCircle}
-            onClick={() => setUI({ isHelpOpen: !ui.isHelpOpen })}
-            title={t('sandbox.help')}
-          />
-          {!isFullscreen && !isMobile && (
-            <>
-              <ToolButton
-                icon={leftOpen ? PanelLeftClose : PanelLeftOpen}
-                onClick={() => setUI({ isLeftPanelOpen: !leftOpen })}
-                title={leftOpen ? t('sandbox.hidePalette') : t('sandbox.showPalette')}
-              />
-              <ToolButton
-                icon={centerOpen ? PanelRightClose : PanelRightOpen}
-                onClick={() => setUI({ isRightPanelOpen: !centerOpen })}
-                title={centerOpen ? t('sandbox.hideProperties') : t('sandbox.showProperties')}
-              />
-              <ToolButton
-                icon={Sparkles}
-                onClick={() => setUI({ isAiPanelOpen: !aiOpen })}
-                title={aiOpen ? t('ai.agent.hide') : t('ai.agent.show')}
-                active={aiOpen}
-              />
-            </>
-          )}
-          <ToolButton
-            icon={isFullscreen ? Minimize2 : Maximize2}
-            onClick={() => setUI({ isFullscreen: !isFullscreen })}
-            title={isFullscreen ? t('sandbox.exitFullscreen') : t('sandbox.fullscreen')}
-            active={isFullscreen}
-          />
-        </div>
-      </div>
-
-      {/* Status bar */}
-      {!isFullscreen && !isMobile && (
-        <div className="mb-2 flex items-center gap-3 px-1 text-xs text-text-tertiary">
-          <span className="flex items-center gap-1">
-            <BoxIcon className="h-3 w-3" />
-            {items.length} {t('sandbox.objects')}
-          </span>
-          {joints.length > 0 && (
-            <span className="flex items-center gap-1">
-              <Link2 className="h-3 w-3" />
-              {joints.length} {t('sandbox.joints')}
-            </span>
-          )}
-          {selectedCount > 0 && (
-            <span className="rounded bg-accent-soft px-1.5 py-0.5 text-accent">
-              {selectedCount === 1
-                ? `${t('sandbox.selected')}: ${friendlyName}`
-                : `${selectedCount} ${t('sandbox.selected')}`}
-            </span>
-          )}
-          {selectedLockedCount > 0 && (
-            <span className="flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
-              <Lock className="h-3 w-3" />
-              {selectedLockedCount}
-            </span>
-          )}
-          {selectedHiddenCount > 0 && (
-            <span className="flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-slate-600">
-              <EyeOff className="h-3 w-3" />
-              {selectedHiddenCount}
-            </span>
-          )}
-          <span className="ml-auto font-mono">FPS: {fps}</span>
-        </div>
-      )}
+      {!isFullscreen && !isMobile && <SandboxStatusBar />}
 
       <div className="flex flex-1 min-h-0 flex-col gap-2">
         <div className="flex flex-1 min-h-0 gap-2">
@@ -1251,7 +637,7 @@ export function Sandbox() {
                     </button>
                     {showPresetMenu && (
                       <div className="absolute left-0 top-full z-20 mt-1 w-40 rounded-lg border border-border bg-paper py-1 shadow-lg">
-                        {SANDBOX_PRESETS.map(({ id, label, scene }) => (
+                        {SANDBOX_PRESETS.map(({ id, label, labelKey, scene }) => (
                           <button
                             key={id}
                             type="button"
@@ -1263,7 +649,7 @@ export function Sandbox() {
                             }}
                             className="block w-full px-3 py-1.5 text-left text-xs text-text-primary hover:bg-accent-soft hover:text-accent"
                           >
-                            {label}
+                            {t(labelKey)}
                           </button>
                         ))}
                       </div>
@@ -1428,79 +814,22 @@ export function Sandbox() {
       >
         <PropertiesPanel />
       </MobileBottomSheet>
+
+      <MobileBottomSheet
+        open={isMobile && mobileSheet === 'data'}
+        onClose={() => setMobileSheet(null)}
+        title={t('sandbox.telemetry')}
+      >
+        <DataPanel />
+      </MobileBottomSheet>
+
+      <MobileBottomSheet
+        open={isMobile && mobileSheet === 'ai'}
+        onClose={() => setMobileSheet(null)}
+        title={t('ai.agent.title')}
+      >
+        <AiAgentPanel onOpenSettings={() => setAiSettingsOpen(true)} />
+      </MobileBottomSheet>
     </div>
-  )
-}
-
-interface ToolButtonProps {
-  icon: typeof Undo2
-  onClick: () => void
-  title: string
-  active?: boolean
-  disabled?: boolean
-  size?: 'sm' | 'md'
-}
-
-function ToolButton({
-  icon: Icon,
-  onClick,
-  title,
-  active,
-  disabled,
-  size = 'md',
-}: ToolButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={cn(
-        'flex items-center justify-center rounded-lg border transition-colors',
-        size === 'sm' ? 'h-7 w-7' : 'h-8 w-8',
-        active
-          ? 'border-accent bg-accent-soft text-accent'
-          : 'border-border bg-paper text-text-secondary hover:border-border-strong hover:text-text-primary',
-        disabled && 'cursor-not-allowed opacity-40 hover:border-border hover:text-text-secondary'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-    </button>
-  )
-}
-
-function Divider() {
-  return <div className="h-5 w-px bg-border" />
-}
-
-function SceneMenuItem({
-  icon: Icon,
-  label,
-  onClick,
-  active,
-  disabled,
-}: {
-  icon: typeof Undo2
-  label: string
-  onClick: () => void
-  active?: boolean
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-xs transition-colors',
-        active
-          ? 'bg-accent-soft text-accent'
-          : 'text-text-primary hover:bg-accent-soft hover:text-accent',
-        disabled && 'cursor-not-allowed opacity-40'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </button>
   )
 }

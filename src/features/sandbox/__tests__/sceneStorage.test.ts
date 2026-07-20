@@ -133,13 +133,13 @@ describe('saveScene / loadStoredScene', () => {
 describe('importScene', () => {
   it('imports a valid versioned scene file', async () => {
     const payload = { version: 1, ...makeScene() }
-    const scene = await importScene(makeFile(JSON.stringify(payload)))
-    expect(scene.items).toHaveLength(1)
+    const result = await importScene(makeFile(JSON.stringify(payload)))
+    expect(result.scene.items).toHaveLength(1)
   })
 
   it('imports a legacy scene file without a version', async () => {
-    const scene = await importScene(makeFile(JSON.stringify(makeScene())))
-    expect(scene.gravity).toEqual([0, -9.81, 0])
+    const result = await importScene(makeFile(JSON.stringify(makeScene())))
+    expect(result.scene.gravity).toEqual([0, -9.81, 0])
   })
 
   it('rejects invalid JSON', async () => {
@@ -155,6 +155,26 @@ describe('importScene', () => {
   it('rejects a scene from a newer version', async () => {
     const payload = { version: 999, ...makeScene() }
     await expect(importScene(makeFile(JSON.stringify(payload)))).rejects.toThrow('高于当前支持版本')
+  })
+
+  it('returns metadata from new-format scenes', async () => {
+    const payload = {
+      version: 1,
+      metadata: { name: 'Test Scene', createdAt: '2024-01-01', itemCount: 2 },
+      ...makeScene(),
+    }
+    const result = await importScene(makeFile(JSON.stringify(payload)))
+    expect(result.metadata?.name).toBe('Test Scene')
+    expect(result.metadata?.itemCount).toBe(2)
+  })
+
+  it('remaps item IDs to avoid conflicts', async () => {
+    const scene = makeScene()
+    const originalId = scene.items[0].id
+    const payload = { version: 1, ...scene }
+    const result = await importScene(makeFile(JSON.stringify(payload)))
+    // Imported items should have new IDs
+    expect(result.scene.items[0].id).not.toBe(originalId)
   })
 })
 
@@ -186,6 +206,9 @@ describe('export helpers', () => {
         vel: [4, 5, 6],
         speed: 8.775,
         accel: 1.5,
+        accelX: 0.5,
+        accelY: 1.2,
+        accelZ: 0.8,
         ke: 10,
         pe: 20,
       },
@@ -209,6 +232,9 @@ describe('export helpers', () => {
         vel: [0, 0, 0],
         speed: Number.POSITIVE_INFINITY,
         accel: 0,
+        accelX: 0,
+        accelY: 0,
+        accelZ: 0,
         ke: 0,
         pe: 0,
       },
