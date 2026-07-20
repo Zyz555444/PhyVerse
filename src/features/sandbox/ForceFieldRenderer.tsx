@@ -51,7 +51,7 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
         // Force magnitude: inverse square law within field radius
         const forceMag = (fieldStrength / (dist * dist)) * FORCE_SCALE * scaledDt
 
-        if (fieldType === 'repulsive') {
+        if (fieldType === 'repel') {
           record.rigidBody.applyImpulse(
             { x: dir.x * forceMag, y: dir.y * forceMag, z: dir.z * forceMag },
             true

@@ -14,7 +14,6 @@ import {
   ClipboardPaste,
   Eraser,
   Camera,
-  X,
   Maximize2,
   Minimize2,
   PanelLeftClose,
@@ -91,14 +90,11 @@ function SceneMenuItem({
 interface SandboxToolbarProps {
   isFullscreen: boolean
   isMobile: boolean
-  cameraResetKey: number
   cloudOpen: boolean
   sceneMenuOpen: boolean
   showJointMenu: boolean
-  showPresetMenu: boolean
   sceneMenuRef: React.RefObject<HTMLDivElement | null>
   jointMenuRef: React.RefObject<HTMLDivElement | null>
-  presetMenuRef: React.RefObject<HTMLDivElement | null>
   fileInputRef: React.RefObject<HTMLInputElement | null>
   mobileSheet: 'equipment' | 'tasks' | 'hierarchy' | 'properties' | 'data' | 'ai' | null
   setCameraResetKey: (key: number | ((prev: number) => number)) => void
@@ -106,7 +102,6 @@ interface SandboxToolbarProps {
   setCloudOpen: (open: boolean | ((prev: boolean) => boolean)) => void
   setSceneMenuOpen: (open: boolean | ((prev: boolean) => boolean)) => void
   setShowJointMenu: (open: boolean | ((prev: boolean) => boolean)) => void
-  setShowPresetMenu: (open: boolean | ((prev: boolean) => boolean)) => void
   setMobileSheet: (sheet: 'equipment' | 'tasks' | 'hierarchy' | 'properties' | 'data' | 'ai' | null) => void
   onImportClick: () => void
   onExport: () => void
@@ -119,14 +114,11 @@ interface SandboxToolbarProps {
 export const SandboxToolbar: FC<SandboxToolbarProps> = ({
   isFullscreen,
   isMobile,
-  cameraResetKey,
   cloudOpen,
   sceneMenuOpen,
   showJointMenu,
-  showPresetMenu,
   sceneMenuRef,
   jointMenuRef,
-  presetMenuRef,
   fileInputRef,
   mobileSheet,
   setCameraResetKey,
@@ -134,7 +126,6 @@ export const SandboxToolbar: FC<SandboxToolbarProps> = ({
   setCloudOpen,
   setSceneMenuOpen,
   setShowJointMenu,
-  setShowPresetMenu,
   setMobileSheet,
   onImportClick,
   onExport,
@@ -157,7 +148,6 @@ export const SandboxToolbar: FC<SandboxToolbarProps> = ({
   const clipboard = useSandboxStore((s) => s.clipboard)
   const editorConfig = useSandboxStore((s) => s.editorConfig)
   const ui = useSandboxStore((s) => s.ui)
-  const selectItem = useSandboxStore((s) => s.selectItem)
   const removeItem = useSandboxStore((s) => s.removeItem)
   const duplicateItem = useSandboxStore((s) => s.duplicateItem)
   const copyItem = useSandboxStore((s) => s.copyItem)

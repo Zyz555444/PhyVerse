@@ -74,7 +74,6 @@ export function Sandbox() {
   const duplicateItem = useSandboxStore((s) => s.duplicateItem)
   const copyItem = useSandboxStore((s) => s.copyItem)
   const pasteItem = useSandboxStore((s) => s.pasteItem)
-  const resetScene = useSandboxStore((s) => s.resetScene)
   const clearScene = useSandboxStore((s) => s.clearScene)
   const loadScene = useSandboxStore((s) => s.loadScene)
   const undo = useSandboxStore((s) => s.undo)
@@ -125,8 +124,6 @@ export function Sandbox() {
   const impulseMode = editorConfig.impulseMode
   const impulseStrength = editorConfig.impulseStrength
   const showTrajectory = editorConfig.showTrajectory
-  const showForceVectors = editorConfig.showForceVectors
-  const showEnergyBar = editorConfig.showEnergyBar
 
   const physicsConfig = useMemo(() => ({ gravity }), [gravity])
 
@@ -417,14 +414,11 @@ export function Sandbox() {
       <SandboxToolbar
         isFullscreen={isFullscreen}
         isMobile={isMobile}
-        cameraResetKey={cameraResetKey}
         cloudOpen={cloudOpen}
         sceneMenuOpen={sceneMenuOpen}
         showJointMenu={showJointMenu}
-        showPresetMenu={showPresetMenu}
         sceneMenuRef={sceneMenuRef}
         jointMenuRef={jointMenuRef}
-        presetMenuRef={presetMenuRef}
         fileInputRef={fileInputRef}
         mobileSheet={mobileSheet}
         setCameraResetKey={setCameraResetKey}
@@ -432,7 +426,6 @@ export function Sandbox() {
         setCloudOpen={setCloudOpen}
         setSceneMenuOpen={setSceneMenuOpen}
         setShowJointMenu={setShowJointMenu}
-        setShowPresetMenu={setShowPresetMenu}
         setMobileSheet={setMobileSheet}
         onImportClick={handleImportClick}
         onExport={handleExport}

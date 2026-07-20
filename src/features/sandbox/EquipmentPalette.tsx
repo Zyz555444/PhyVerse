@@ -16,7 +16,6 @@ import {
   Atom,
   Search,
   Bookmark,
-  X,
   Pencil,
   Trash2,
   EllipsisVertical,

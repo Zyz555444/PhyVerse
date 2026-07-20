@@ -1,5 +1,3 @@
-import * as THREE from 'three'
-
 export interface Particle {
   x: number
   y: number

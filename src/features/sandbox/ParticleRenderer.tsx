@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { ParticleManager } from './ParticleManager'
@@ -24,7 +24,6 @@ export function ParticleRenderer({ manager, maxDistance = 80 }: ParticleRenderer
 
   // Pre-allocate max instances
   const maxInstances = 600
-  const tempMatrix = useMemo(() => new THREE.Matrix4(), [])
 
   // Reset all instances to invisible on mount / when empty
   useEffect(() => {

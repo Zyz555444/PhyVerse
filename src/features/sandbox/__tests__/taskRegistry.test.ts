@@ -106,10 +106,7 @@ describe('taskRegistry', () => {
     }
 
     it('passes when two values are close', () => {
-      const left = makeSample({ ke: 10, pe: 5 })
-      const right = makeSample({ ke: 10.05, pe: 5 })
       const getSample = (_itemId?: string) => {
-        // Always return the same sample for simplicity
         return makeSample({ ke: 10, pe: 5 })
       }
       const result = evaluateObjective(compareObj, getSample, 0)

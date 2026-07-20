@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useSandboxStore, type TelemetrySample } from './sandboxStore'
-import { getTaskById, evaluateObjective, type TaskObjective } from './taskRegistry'
+import { getTaskById, evaluateObjective } from './taskRegistry'
 
 /**
  * Calculates the oscillation period from telemetry samples using zero-crossing
