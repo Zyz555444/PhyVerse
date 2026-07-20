@@ -14,10 +14,14 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
+        manualChunks(id) {
           // Split heavy 3D libraries into separate chunks
-          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
-          'physics-vendor': ['@dimforge/rapier3d'],
+          if (id.includes('three') || id.includes('@react-three/fiber') || id.includes('@react-three/drei')) {
+            return 'three-vendor'
+          }
+          if (id.includes('@dimforge/rapier3d')) {
+            return 'physics-vendor'
+          }
         },
       },
     },
