@@ -1,4 +1,5 @@
 import { type FC } from 'react'
+import { useShallow } from 'zustand/shallow'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useSandboxStore, type JointType } from '../sandboxStore'
 import { ToolButton, Divider } from './ToolButton'
@@ -135,19 +136,35 @@ export const SandboxToolbar: FC<SandboxToolbarProps> = ({
   handleFileChange,
 }) => {
   const { t } = useI18n()
-  const isRunning = useSandboxStore((s) => s.isRunning)
+  const {
+    isRunning,
+    isPlaying,
+    isRecording,
+    recordingFrames,
+    selectedId,
+    multiSelectedIds,
+    clipboard,
+    editorConfig,
+    ui,
+    items,
+  } = useSandboxStore(
+    useShallow((s) => ({
+      isRunning: s.isRunning,
+      isPlaying: s.recording.isPlaying,
+      isRecording: s.recording.isRecording,
+      recordingFrames: s.recording.frames,
+      selectedId: s.selectedId,
+      multiSelectedIds: s.multiSelectedIds,
+      clipboard: s.clipboard,
+      editorConfig: s.editorConfig,
+      ui: s.ui,
+      items: s.items,
+    }))
+  )
   const setRunning = useSandboxStore((s) => s.setRunning)
-  const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
-  const isRecording = useSandboxStore((s) => s.recording.isRecording)
-  const recordingFrames = useSandboxStore((s) => s.recording.frames)
   const startRecording = useSandboxStore((s) => s.startRecording)
   const stopRecording = useSandboxStore((s) => s.stopRecording)
   const clearRecording = useSandboxStore((s) => s.clearRecording)
-  const selectedId = useSandboxStore((s) => s.selectedId)
-  const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
-  const clipboard = useSandboxStore((s) => s.clipboard)
-  const editorConfig = useSandboxStore((s) => s.editorConfig)
-  const ui = useSandboxStore((s) => s.ui)
   const removeItem = useSandboxStore((s) => s.removeItem)
   const duplicateItem = useSandboxStore((s) => s.duplicateItem)
   const copyItem = useSandboxStore((s) => s.copyItem)
@@ -159,7 +176,6 @@ export const SandboxToolbar: FC<SandboxToolbarProps> = ({
   const setEditorConfig = useSandboxStore((s) => s.setEditorConfig)
   const setUI = useSandboxStore((s) => s.setUI)
   const requestStep = useSandboxStore((s) => s.requestStep)
-  const items = useSandboxStore((s) => s.items)
 
   const gizmoMode = editorConfig.gizmoMode
   const gizmoSpace = editorConfig.gizmoSpace

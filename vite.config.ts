@@ -15,12 +15,29 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Split heavy 3D libraries into separate chunks
-          if (id.includes('three') || id.includes('@react-three/fiber') || id.includes('@react-three/drei')) {
-            return 'three-vendor'
+          // Core 3D rendering engine (largest single dependency)
+          if (id.includes('three') || id.includes('@react-three/fiber')) {
+            return 'three-core'
           }
+          // Utility 3D helpers (orbit controls, shaders, etc)
+          if (id.includes('@react-three/drei')) {
+            return 'three-drei'
+          }
+          // Post-processing effects (bloom, SSAO, etc)
+          if (id.includes('@react-three/postprocessing')) {
+            return 'three-postprocessing'
+          }
+          // Physics engine WASM
           if (id.includes('@dimforge/rapier3d')) {
             return 'physics-vendor'
+          }
+          // Charts (only used in data panels)
+          if (id.includes('recharts')) {
+            return 'charts-vendor'
+          }
+          // Animation library
+          if (id.includes('framer-motion')) {
+            return 'motion-vendor'
           }
         },
       },

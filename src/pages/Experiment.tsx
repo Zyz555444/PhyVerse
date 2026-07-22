@@ -1,6 +1,7 @@
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import * as Tabs from '@radix-ui/react-tabs'
+import { useShallow } from 'zustand/shallow'
 import {
   ArrowLeft,
   Pause,
@@ -33,6 +34,7 @@ import { DotTimer } from '@/features/measurement/DotTimer'
 import { VirtualRuler } from '@/features/measurement/VirtualRuler'
 import { VirtualProtractor } from '@/features/measurement/VirtualProtractor'
 import { PlaybackControls } from '@/features/recording/PlaybackControls'
+import { useFps } from '@/shared/hooks/useFps'
 import { Button } from '@/shared/ui/Button'
 import { Badge } from '@/shared/ui/Badge'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -41,10 +43,12 @@ import { cn } from '@/shared/utils/cn'
 export function Experiment() {
   const { experimentId } = useParams<{ experimentId: string }>()
   const { t, language } = useI18n()
+  const fps = useFps()
   const experiment = experimentId ? getExperiment(experimentId) : undefined
 
-  const params = useExperimentStore((s) => s.params)
-  const isPaused = useExperimentStore((s) => s.isPaused)
+  const { params, isPaused } = useExperimentStore(
+    useShallow((s) => ({ params: s.params, isPaused: s.isPaused }))
+  )
   const setParams = useExperimentStore((s) => s.setParams)
   const togglePause = useExperimentStore((s) => s.togglePause)
   const reset = useExperimentStore((s) => s.reset)
@@ -63,6 +67,21 @@ export function Experiment() {
       setParams(defaultParams)
     }
   }, [experiment, defaultParams, setParams])
+
+  // Adaptive DPR based on FPS
+  const lowFpsCountRef = useRef(0)
+  const [adaptiveDpr, setAdaptiveDpr] = useState<[number, number]>([1, 1.5])
+  useEffect(() => {
+    if (fps > 0 && fps < 30) {
+      lowFpsCountRef.current += 1
+      if (lowFpsCountRef.current >= 3) {
+        setAdaptiveDpr([1, 1.0])
+      }
+    } else if (fps >= 45) {
+      lowFpsCountRef.current = 0
+      setAdaptiveDpr([1, 1.5])
+    }
+  }, [fps])
 
   if (!experiment) {
     return (
@@ -144,7 +163,7 @@ export function Experiment() {
       <div className="flex gap-4">
         <div className="flex-1">
           <div className="relative h-[600px] overflow-hidden rounded-xl border border-border bg-paper-tertiary">
-            <Scene cameraPosition={[6, 5, 6]} cameraView="free" showGrid>
+            <Scene cameraPosition={[6, 5, 6]} cameraView="free" showGrid dprRange={adaptiveDpr} demandLoop={isPaused}>
               <PhysicsProvider key={experiment.id} autoStep={!isPaused}>
                 <ExperimentSetup experiment={experiment} params={params} />
                 <DataCollector experiment={experiment} />

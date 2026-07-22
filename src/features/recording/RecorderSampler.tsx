@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useShallow } from 'zustand/shallow'
 import { usePhysics } from '@/features/physics/usePhysics'
 import {
   useSandboxStore,
@@ -13,15 +14,22 @@ import {
  */
 export function RecorderSampler({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
-  const isRecording = useSandboxStore((s) => s.recording.isRecording)
-  const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
-  const recordingFps = useSandboxStore((s) => s.recording.fps) || 24 // Default to 24fps
-  const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
+  const { isRecording, isPlaying, recordingFps, timeScale, items } = useSandboxStore(
+    useShallow((s) => ({
+      isRecording: s.recording.isRecording,
+      isPlaying: s.recording.isPlaying,
+      recordingFps: s.recording.fps,
+      timeScale: s.editorConfig.timeScale,
+      items: s.items,
+    }))
+  )
   const pushRecordedFrame = useSandboxStore((s) => s.pushRecordedFrame)
-  const items = useSandboxStore((s) => s.items)
 
   const accumRef = useRef(0)
   const frameTimeRef = useRef(0)
+
+  // Use resolved FPS with default fallback
+  const fps = recordingFps || 24
 
   // Reset accumulators when recording starts/stops
   useEffect(() => {
@@ -36,7 +44,7 @@ export function RecorderSampler({ isRunning }: { isRunning: boolean }) {
     const scaledDelta = delta * timeScale
     frameTimeRef.current += scaledDelta
 
-    const interval = 1 / recordingFps
+    const interval = 1 / fps
     accumRef.current += scaledDelta
 
     if (accumRef.current >= interval) {

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useShallow } from 'zustand/shallow'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useSandboxStore } from '../sandboxStore'
 import { getFriendlyName } from '../friendlyName'
@@ -7,10 +8,14 @@ import { Box as BoxIcon, Link2, Lock, EyeOff } from 'lucide-react'
 
 export function SandboxStatusBar() {
   const { t } = useI18n()
-  const items = useSandboxStore((s) => s.items)
-  const joints = useSandboxStore((s) => s.joints)
-  const selectedId = useSandboxStore((s) => s.selectedId)
-  const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
+  const { items, joints, selectedId, multiSelectedIds } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      joints: s.joints,
+      selectedId: s.selectedId,
+      multiSelectedIds: s.multiSelectedIds,
+    }))
+  )
   const fps = useFps()
 
   const selectedCount = [selectedId, ...multiSelectedIds].filter(Boolean).length

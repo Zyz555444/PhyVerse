@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/shallow'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { useDebouncedCallback } from '@/shared/hooks/useDebounce'
 import { useIsMobile } from '@/shared/hooks/useIsMobile'
+import { useFps } from '@/shared/hooks/useFps'
 import { MobileBottomSheet } from '@/shared/ui/MobileBottomSheet'
 import { Scene } from '@/features/canvas/Scene'
 import { PhysicsProvider } from '@/features/physics/PhysicsProvider'
@@ -57,14 +59,38 @@ import { Check, X } from 'lucide-react'
 
 export function Sandbox() {
   const { t } = useI18n()
-  const items = useSandboxStore((s) => s.items)
-  const joints = useSandboxStore((s) => s.joints)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const selectedId = useSandboxStore((s) => s.selectedId)
-  const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
-  const isGizmoDragging = useSandboxStore((s) => s.isGizmoDragging)
-  const editorConfig = useSandboxStore((s) => s.editorConfig)
-  const ui = useSandboxStore((s) => s.ui)
+  const fps = useFps()
+
+  // Group state selectors with useShallow to minimize re-renders (was 30+ individual selectors)
+  const {
+    items,
+    joints,
+    gravity,
+    selectedId,
+    multiSelectedIds,
+    isGizmoDragging,
+    editorConfig,
+    ui,
+    taskState,
+    telemetry,
+    isRunning,
+  } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      joints: s.joints,
+      gravity: s.gravity,
+      selectedId: s.selectedId,
+      multiSelectedIds: s.multiSelectedIds,
+      isGizmoDragging: s.isGizmoDragging,
+      editorConfig: s.editorConfig,
+      ui: s.ui,
+      taskState: s.task,
+      telemetry: s.telemetry,
+      isRunning: s.isRunning,
+    }))
+  )
+
+  // Actions are stable references, no re-render impact
   const selectItem = useSandboxStore((s) => s.selectItem)
   const selectAll = useSandboxStore((s) => s.selectAll)
   const nudgeSelection = useSandboxStore((s) => s.nudgeSelection)
@@ -89,10 +115,7 @@ export function Sandbox() {
   const resetTaskStep = useSandboxStore((s) => s.resetTaskStep)
   const addTaskRecord = useSandboxStore((s) => s.addTaskRecord)
   const clearTelemetry = useSandboxStore((s) => s.clearTelemetry)
-  const taskState = useSandboxStore((s) => s.task)
-  const telemetry = useSandboxStore((s) => s.telemetry)
   const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
-  const isRunning = useSandboxStore((s) => s.isRunning)
   const setRunning = useSandboxStore((s) => s.setRunning)
 
   const [saved, setSaved] = useState(false)
@@ -127,6 +150,24 @@ export function Sandbox() {
 
   const physicsConfig = useMemo(() => ({ gravity }), [gravity])
 
+  // Adaptive DPR: downgrade when FPS drops below 30 for 3 consecutive seconds
+  const lowFpsCountRef = useRef(0)
+  const [adaptiveDpr, setAdaptiveDpr] = useState<[number, number]>([1, 1.5])
+  useEffect(() => {
+    if (fps > 0 && fps < 30) {
+      lowFpsCountRef.current += 1
+      if (lowFpsCountRef.current >= 3) {
+        setAdaptiveDpr([1, 1.0])
+      }
+    } else if (fps >= 45) {
+      lowFpsCountRef.current = 0
+      setAdaptiveDpr([1, 1.5])
+    }
+  }, [fps])
+
+  // Demand-loop rendering when physics is paused and no gizmo active
+  const demandLoop = !isRunning && !isGizmoDragging
+
   useEffect(() => {
     const stored = loadStoredScene()
     if (stored) {
@@ -150,7 +191,7 @@ export function Sandbox() {
   const debouncedSave = useDebouncedCallback((scene: SandboxScene) => {
     saveScene(scene)
     setSaved(true)
-  }, 1500) // Increased from 800ms to 1500ms to reduce save frequency
+  }, 1500)
 
   useEffect(() => {
     debouncedSave({ items, gravity, joints })
@@ -494,6 +535,8 @@ export function Sandbox() {
               focusKey={cameraFocusKey}
               showGrid
               environment
+              dprRange={adaptiveDpr}
+              demandLoop={demandLoop}
             >
               <PhysicsProvider
                 config={physicsConfig}

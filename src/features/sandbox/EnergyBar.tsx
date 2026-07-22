@@ -1,4 +1,5 @@
 import { Box } from '@react-three/drei'
+import { useShallow } from 'zustand/shallow'
 import { usePhysics } from '@/features/physics/usePhysics'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
 
@@ -15,9 +16,13 @@ const BAR_OFFSET_Y = 0.8
  */
 export function EnergyBar({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
-  const items = useSandboxStore((s) => s.items)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const showEnergyBar = useSandboxStore((s) => s.editorConfig.showEnergyBar)
+  const { items, gravity, showEnergyBar } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      gravity: s.gravity,
+      showEnergyBar: s.editorConfig.showEnergyBar,
+    }))
+  )
 
   if (!isRunning || !showEnergyBar) return null
 

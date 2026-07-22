@@ -14,6 +14,9 @@ export function BoxSelection() {
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const multiRef = useRef(false)
   const overlayRef = useRef<HTMLDivElement | null>(null)
+  // Use ref to avoid useEffect dependency on items array
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   const createOverlay = useCallback(() => {
     if (overlayRef.current) return overlayRef.current
@@ -91,7 +94,8 @@ export function BoxSelection() {
 
         const selectedIds: string[] = []
         const temp = new THREE.Vector3()
-        items.forEach((item) => {
+        const currentItems = itemsRef.current
+        currentItems.forEach((item) => {
           temp.set(item.position[0], item.position[1], item.position[2])
           temp.project(camera)
           const screenX = ((temp.x + 1) / 2) * size.width
@@ -125,7 +129,7 @@ export function BoxSelection() {
       window.removeEventListener('pointerup', handlePointerUp)
       removeOverlay()
     }
-  }, [gl, camera, size, items, selectItem, selectItems, getPoint, updateOverlay, removeOverlay])
+  }, [gl, camera, size, selectItem, selectItems, getPoint, updateOverlay, removeOverlay])
 
   return null
 }

@@ -22,6 +22,8 @@ export interface SceneProps {
   environment?: boolean
   /** Device pixel ratio range for performance optimization. Default: [1, 1.5] */
   dprRange?: [number, number]
+  /** When true, use demand-based rendering (only re-render on state change / invalidate). Default: false (always). */
+  demandLoop?: boolean
 }
 
 export function Scene({
@@ -35,10 +37,12 @@ export function Scene({
   focusKey,
   environment = false,
   dprRange = [1, 1.5],
+  demandLoop = false,
 }: SceneProps) {
   return (
     <Canvas
       shadows={enableShadows ? 'percentage' : false}
+      frameloop={demandLoop ? 'demand' : 'always'}
       gl={{
         antialias: true,
         toneMapping: THREE.ACESFilmicToneMapping,

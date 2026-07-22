@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/shallow'
 import { usePhysics } from '@/features/physics/usePhysics'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
 
@@ -20,10 +21,14 @@ interface ForceDisplayData {
 
 export function ForceVisualizer({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
-  const items = useSandboxStore((s) => s.items)
-  const joints = useSandboxStore((s) => s.joints)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const showForceVectors = useSandboxStore((s) => s.editorConfig.showForceVectors)
+  const { items, joints, gravity, showForceVectors } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      joints: s.joints,
+      gravity: s.gravity,
+      showForceVectors: s.editorConfig.showForceVectors,
+    }))
+  )
 
   const [forceData, setForceData] = useState<ForceDisplayData[]>([])
   const prevVelRef = useRef<Map<string, THREE.Vector3>>(new Map())

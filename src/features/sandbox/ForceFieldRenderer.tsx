@@ -1,37 +1,48 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useShallow } from 'zustand/shallow'
 import { Sphere, Ring } from '@react-three/drei'
-import * as THREE from 'three'
+import { DoubleSide } from 'three'
 import { usePhysics } from '@/features/physics/usePhysics'
 import { useSandboxStore, getForceFieldType, getForceFieldStrength } from '@/features/sandbox/sandboxStore'
 
 const FORCE_FIELD_COLOR = '#8b5cf6'
 const FORCE_SCALE = 50
+const FORCE_FIELD_SKIP_FRAMES = 3 // Apply force every N frames to reduce CPU load
 
 /**
  * Renders force field sources as pulsing spheres and applies
  * gravitational/repulsive forces to nearby dynamic bodies.
+ * Force calculations are throttled to every 3rd frame.
  */
 export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
   const { world } = usePhysics()
-  const items = useSandboxStore((s) => s.items)
-  const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
+  const { items, timeScale } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      timeScale: s.editorConfig.timeScale,
+    }))
+  )
+
+  const frameCounter = useRef(0)
 
   const forceFields = useMemo(() => items.filter((item) => item.shape === 'force_field'), [items])
 
   useFrame((_, delta) => {
     if (!isRunning || !world?.isReady || forceFields.length === 0) return
 
+    // Throttle: only apply forces every FORCE_FIELD_SKIP_FRAMES
+    frameCounter.current = (frameCounter.current + 1) % FORCE_FIELD_SKIP_FRAMES
+    if (frameCounter.current !== 0) return
+
     const dynamicItems = items.filter((it) => it.isDynamic)
     if (dynamicItems.length === 0) return
-    const scaledDt = delta * timeScale
+    const scaledDt = delta * timeScale * FORCE_FIELD_SKIP_FRAMES
 
     for (const field of forceFields) {
       const [fx, fy, fz] = field.position
       const fieldRadius = field.size[0] / 2
       const fieldStrength = getForceFieldStrength(field)
-
-      // Store the field type
       const fieldType = getForceFieldType(field)
 
       for (const dynItem of dynamicItems) {
@@ -42,26 +53,25 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
         const dx = pos.x - fx
         const dy = pos.y - fy
         const dz = pos.z - fz
-        const dist = Math.hypot(dx, dy, dz)
+        const distSq = dx * dx + dy * dy + dz * dz
 
-        // Early-out: skip if outside field radius
-        if (dist >= fieldRadius || dist < 0.01) continue
+        // Coarse reject: skip if outside field radius (using squared distance)
+        if (distSq >= fieldRadius * fieldRadius || distSq < 0.0001) continue
 
-        const dir = new THREE.Vector3(dx, dy, dz).normalize()
+        const dist = Math.sqrt(distSq)
+        const invDist = 1 / dist
+        const dirX = dx * invDist
+        const dirY = dy * invDist
+        const dirZ = dz * invDist
+
         // Force magnitude: inverse square law within field radius
         const forceMag = (fieldStrength / (dist * dist)) * FORCE_SCALE * scaledDt
 
-        if (fieldType === 'repel') {
-          record.rigidBody.applyImpulse(
-            { x: dir.x * forceMag, y: dir.y * forceMag, z: dir.z * forceMag },
-            true
-          )
-        } else {
-          record.rigidBody.applyImpulse(
-            { x: -dir.x * forceMag, y: -dir.y * forceMag, z: -dir.z * forceMag },
-            true
-          )
-        }
+        const sign = fieldType === 'repel' ? 1 : -1
+        record.rigidBody.applyImpulse(
+          { x: sign * dirX * forceMag, y: sign * dirY * forceMag, z: sign * dirZ * forceMag },
+          true
+        )
       }
     }
   })
@@ -109,7 +119,7 @@ export function ForceFieldRenderer({ isRunning }: { isRunning: boolean }) {
                 color={FORCE_FIELD_COLOR}
                 transparent
                 opacity={0.2}
-                side={THREE.DoubleSide}
+                side={DoubleSide}
                 depthTest={false}
                 depthWrite={false}
               />

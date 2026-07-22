@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Bot, X, Sparkles, RefreshCw, Send, ChevronRight } from 'lucide-react'
+import { useShallow } from 'zustand/shallow'
 import {
   useSandboxStore,
   type SandboxItem,
@@ -17,11 +18,15 @@ export function AITutorPanel() {
   const [chatInput, setChatInput] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([])
 
-  const items = useSandboxStore((s) => s.items)
-  const joints = useSandboxStore((s) => s.joints)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const telemetry = useSandboxStore((s) => s.telemetry.live)
-  const simTime = useSandboxStore((s) => s.telemetry.simTime)
+  const { items, joints, gravity, telemetry, simTime } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      joints: s.joints,
+      gravity: s.gravity,
+      telemetry: s.telemetry.live,
+      simTime: s.telemetry.simTime,
+    }))
+  )
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 

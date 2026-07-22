@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useShallow } from 'zustand/shallow'
 import {
   Bot,
   Send,
@@ -167,11 +168,16 @@ function isAbortError(err: unknown): boolean {
 export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const { t } = useI18n()
   const { user } = useAuth()
-  const items = useSandboxStore((s) => s.items)
-  const selectedId = useSandboxStore((s) => s.selectedId)
-  const isRunning = useSandboxStore((s) => s.isRunning)
-  const gravity = useSandboxStore((s) => s.gravity)
-  const timeScale = useSandboxStore((s) => s.editorConfig.timeScale)
+  const { items, selectedId, isRunning, gravity, editorConfig } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      selectedId: s.selectedId,
+      isRunning: s.isRunning,
+      gravity: s.gravity,
+      editorConfig: s.editorConfig,
+    })),
+  )
+  const timeScale = editorConfig.timeScale
   const addItem = useSandboxStore((s) => s.addItem)
   const removeItem = useSandboxStore((s) => s.removeItem)
   const updateItem = useSandboxStore((s) => s.updateItem)

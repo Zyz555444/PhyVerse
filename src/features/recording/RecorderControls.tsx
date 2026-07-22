@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Circle, Square, Download, Play, Pause, Trash2, FileJson } from 'lucide-react'
+import { useShallow } from 'zustand/shallow'
 import { useSandboxStore } from '@/features/sandbox/sandboxStore'
 import { useI18n } from '@/shared/hooks/useI18n'
 import { cn } from '@/shared/utils/cn'
@@ -9,10 +10,14 @@ const MAX_RECORDING_DURATION = 30 // seconds
 
 export function RecorderControls() {
   const { t } = useI18n()
-  const isRecording = useSandboxStore((s) => s.recording.isRecording)
-  const isPlaying = useSandboxStore((s) => s.recording.isPlaying)
-  const frames = useSandboxStore((s) => s.recording.frames)
-  const recording = useSandboxStore((s) => s.recording)
+  const { isRecording, isPlaying, frames, recording } = useSandboxStore(
+    useShallow((s) => ({
+      isRecording: s.recording.isRecording,
+      isPlaying: s.recording.isPlaying,
+      frames: s.recording.frames,
+      recording: s.recording,
+    }))
+  )
   const startRecording = useSandboxStore((s) => s.startRecording)
   const stopRecording = useSandboxStore((s) => s.stopRecording)
   const startPlayback = useSandboxStore((s) => s.startPlayback)

@@ -22,7 +22,7 @@ export function PostProcessing({
       />
       {enableSSAO ? (
         <SSAO
-          samples={16}
+          samples={9}
           radius={0.05}
           intensity={20}
           luminanceInfluence={0.6}

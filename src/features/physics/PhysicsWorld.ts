@@ -36,7 +36,8 @@ export class PhysicsWorld {
 
     const integrationParams = this.world.integrationParameters
     if (this.config.allowSleep) {
-      integrationParams.normalizedAllowedLinearError = 0.001
+      // Relaxed sleep threshold: objects sleep faster, reducing CPU cost for static scenes
+      integrationParams.normalizedAllowedLinearError = 0.005
     }
 
     this.eventQueue = new RAPIER.EventQueue(true)
@@ -59,15 +60,20 @@ export class PhysicsWorld {
 
   addBody(label: string, def: RigidBodyDef): PhysicsBodyRecord {
     if (this.bodies.has(label)) {
-      // Defensive: remove stale body instead of crashing. This can happen when
-      // an experiment remounts before the previous cleanup has fully run.
+      // Defensive: remove stale body instead of crashing
       this.removeBody(label)
+    }
+
+    // Clamp minimum mass for numerical stability in Rapier
+    const safeDef = {
+      ...def,
+      mass: def.mass && def.mass < 0.05 ? 0.05 : def.mass,
     }
 
     const mergedDef: RigidBodyDef = {
       friction: this.config.contactMaterial.friction,
       restitution: this.config.contactMaterial.restitution,
-      ...def,
+      ...safeDef,
     }
 
     const record = createRigidBody(this.world, mergedDef)
@@ -124,6 +130,18 @@ export class PhysicsWorld {
 
   getTimestep(): number {
     return this.world.timestep
+  }
+
+  /** Adapt timestep based on current FPS to maintain physics quality without waste. */
+  adaptTimestep(fps: number): void {
+    if (fps <= 0) return
+    if (fps < 30) {
+      this.world.timestep = 1 / 60
+      this.config.maxSubSteps = 4
+    } else {
+      this.world.timestep = this.config.timestep
+      this.config.maxSubSteps = 8
+    }
   }
 
   reset(): void {

@@ -8,6 +8,11 @@
     <meta name="theme-color" content="#33A6B8" />
     <meta name="description" content="PhyVerse — 3D 高中物理实验引擎" />
     <title>PhyVerse — 物理宇宙</title>
+    <!-- Preload Rapier WASM for faster physics engine initialization -->
+    <link rel="preload" as="fetch" href="https://cdn.jsdelivr.net/npm/@dimforge/rapier3d@0.19.3/rapier3d_bg.wasm" crossorigin />
+    <!-- Preconnect to CDN origins for faster asset loading -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
   </head>
   <body>
     <div id="root">

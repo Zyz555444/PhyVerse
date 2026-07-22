@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/shallow'
 import {
   Box,
   Circle,
@@ -45,15 +46,19 @@ const SHAPE_ICON: Record<SandboxShape, LucideIcon> = {
 
 export function SceneHierarchyPanel() {
   const { t } = useI18n()
-  const items = useSandboxStore((s) => s.items)
-  const selectedId = useSandboxStore((s) => s.selectedId)
-  const multiSelectedIds = useSandboxStore((s) => s.multiSelectedIds)
+  const { items, selectedId, multiSelectedIds, isHierarchyPanelOpen } = useSandboxStore(
+    useShallow((s) => ({
+      items: s.items,
+      selectedId: s.selectedId,
+      multiSelectedIds: s.multiSelectedIds,
+      isHierarchyPanelOpen: s.ui.isHierarchyPanelOpen,
+    }))
+  )
   const selectItem = useSandboxStore((s) => s.selectItem)
   const removeItem = useSandboxStore((s) => s.removeItem)
   const toggleLock = useSandboxStore((s) => s.toggleLock)
   const toggleVisibility = useSandboxStore((s) => s.toggleVisibility)
   const setDisplayName = useSandboxStore((s) => s.setDisplayName)
-  const isHierarchyPanelOpen = useSandboxStore((s) => s.ui.isHierarchyPanelOpen)
   const setUI = useSandboxStore((s) => s.setUI)
 
   const [editingId, setEditingId] = useState<string | null>(null)

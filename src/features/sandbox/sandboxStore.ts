@@ -193,6 +193,7 @@ export interface TaskState {
 }
 
 const TELEMETRY_MAX_SAMPLES = 300 // Reduced from 600 for memory optimization
+const MAX_RECORDING_FRAMES = 1800 // 30 seconds @ 60fps, prevents memory bloat
 
 interface HistoryState {
   past: SandboxScene[]
@@ -1173,12 +1174,19 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
     })),
 
   pushRecordedFrame: (frame) =>
-    set((state) => ({
-      recording: {
-        ...state.recording,
-        frames: [...state.recording.frames, frame],
-      },
-    })),
+    set((state) => {
+      const frames = [...state.recording.frames, frame]
+      // Enforce recording frame limit to prevent memory bloat
+      if (frames.length > MAX_RECORDING_FRAMES) {
+        frames.splice(0, frames.length - MAX_RECORDING_FRAMES)
+      }
+      return {
+        recording: {
+          ...state.recording,
+          frames,
+        },
+      }
+    }),
 
   clearRecording: () =>
     set((state) => ({
