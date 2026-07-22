@@ -462,6 +462,39 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     return { content, toolCalls: Object.values(toolCallsRef.current), errors }
   }
 
+  // Safely parse JSON with tolerance for malformed AI output
+  const safeJsonParse = (raw: string, toolName: string): Record<string, unknown> => {
+    const trimmed = raw.trim()
+    if (trimmed === '' || trimmed === '{}') return {}
+    
+    // Standard parse attempt
+    try {
+      return JSON.parse(trimmed)
+    } catch {
+      // Try to extract the first valid JSON object
+      const firstBrace = trimmed.indexOf('{')
+      if (firstBrace >= 0) {
+        let depth = 0
+        for (let i = firstBrace; i < trimmed.length; i++) {
+          if (trimmed[i] === '{') depth++
+          else if (trimmed[i] === '}') {
+            depth--
+            if (depth === 0) {
+              try {
+                return JSON.parse(trimmed.slice(firstBrace, i + 1))
+              } catch {
+                break
+              }
+            }
+          }
+        }
+      }
+      
+      console.warn(`[AiAgentPanel] Could not parse tool arguments for ${toolName}, defaulting to {}`)
+      return {}
+    }
+  }
+
   const executeToolCalls = useCallback(
     async (toolCalls: ToolCallState[]) => {
       const results: Array<{ tool_call_id: string; role: 'tool'; content: string; name: string }> =
@@ -471,24 +504,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       for (const call of toolCalls) {
         let args: Record<string, unknown> = {}
         
-        try {
-          if (!call.arguments || call.arguments.trim() === '') {
-            args = {}
-          } else {
-            args = JSON.parse(call.arguments)
-          }
-        } catch (parseErr) {
-          const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-          call.status = 'error'
-          call.result = `参数解析失败: ${errMsg.slice(0, 100)}`
-          results.push({
-            tool_call_id: call.id,
-            role: 'tool',
-            content: call.result,
-            name: call.name,
-          })
-          console.error(`[AiAgentPanel] Failed to parse tool arguments for ${call.name}:`, errMsg)
-          continue
+        if (call.arguments && call.arguments.trim() !== '') {
+          args = safeJsonParse(call.arguments, call.name)
         }
         
         // Execute tool with retry
@@ -675,7 +692,13 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         }
         const raw = err instanceof Error ? err.message : String(err)
         console.error('Follow-up error:', raw)
-        setError(raw.includes('Invalid JSON') ? 'AI 生成格式出错，请重试' : raw.slice(0, 120))
+        if (raw.includes('429') || raw.includes('rate') || raw.includes('limit')) {
+          setError('AI 服务请求过于频繁，请等待几秒后重试')
+        } else if (raw.includes('Invalid JSON')) {
+          setError('AI 生成格式出错，请重试')
+        } else {
+          setError(raw.slice(0, 120))
+        }
       }
     },
     [config, flushStreamUpdate]
@@ -835,20 +858,25 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         return
       }
       const raw = err instanceof Error ? err.message : String(err)
-      let friendly = raw
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed.error?.metadata?.raw) {
-          const inner = JSON.parse(parsed.error.metadata.raw)
-          friendly = inner.error?.message || parsed.error.message || raw
-        } else if (parsed.error?.message) {
-          friendly = parsed.error.message
-        } else if (parsed.error) {
-          friendly = String(parsed.error)
+        let friendly = raw
+        // Detect rate limiting
+        if (raw.includes('429') || raw.includes('rate') || raw.includes('limit')) {
+          friendly = 'AI 服务请求过于频繁，请等待几秒后重试'
+        } else {
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed.error?.metadata?.raw) {
+              const inner = JSON.parse(parsed.error.metadata.raw)
+              friendly = inner.error?.message || parsed.error.message || raw
+            } else if (parsed.error?.message) {
+              friendly = parsed.error.message
+            } else if (parsed.error) {
+              friendly = String(parsed.error)
+            }
+          } catch {
+            // not JSON, use raw string
+          }
         }
-      } catch {
-        // not JSON, use raw string
-      }
       if (friendly.length > 150) {
         friendly = friendly.slice(0, 150) + '...'
       }
