@@ -1,4 +1,5 @@
 import type { SandboxItem, SandboxShape } from '@/features/sandbox/sandboxStore'
+import { physicsKnowledgeBase } from './PhysicsKnowledgeBase'
 
 export interface AgentToolParameter {
   type: string
@@ -556,6 +557,58 @@ export const AGENT_TOOLS: AgentTool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'query_physics_knowledge',
+      description:
+        '查询物理知识库，获取与关键词相关的公式、概念和实验。可以查找物理公式定义、概念解释或实验方案。',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: {
+            type: 'string',
+            description: '物理主题关键词，如 "重力"、"能量守恒"、"动能"、"碰撞"、"单摆" 等',
+          },
+        },
+        required: ['topic'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_formulas',
+      description: '搜索物理公式。根据关键词查找相关的物理公式及其变量定义和描述。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: '搜索关键词，如 "速度"、"牛顿"、"动能"、"动量" 等',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_concepts',
+      description: '搜索物理概念。查找物理概念的详细解释，包括关键点、常见误解、示例等。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: '搜索关键词，如 "惯性"、"能量守恒"、"摩擦力"、"自由落体" 等',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ]
 
 function findItemByIdOrName(items: SandboxItem[], idOrName: string): SandboxItem | undefined {
@@ -1065,6 +1118,112 @@ ${ctx.items
           isDynamic: item.isDynamic,
           friction: item.friction,
           restitution: item.restitution,
+        },
+      }
+    }
+
+    case 'query_physics_knowledge': {
+      const topic = typeof args.topic === 'string' ? args.topic : ''
+      if (!topic) {
+        return { success: false, message: '请提供物理主题关键词。' }
+      }
+      const result = physicsKnowledgeBase.getExplanationForTopic(topic)
+      const parts: string[] = []
+      if (result.formulas.length > 0) {
+        parts.push(`**相关公式 (${result.formulas.length})**:`)
+        for (const f of result.formulas.slice(0, 5)) {
+          parts.push(`- ${f.name}: \`${f.formula}\` — ${f.description}`)
+        }
+      }
+      if (result.concepts.length > 0) {
+        parts.push(`\n**相关概念 (${result.concepts.length})**:`)
+        for (const c of result.concepts.slice(0, 3)) {
+          parts.push(`- ${c.name}: ${c.description}`)
+        }
+      }
+      if (result.experiments.length > 0) {
+        parts.push(`\n**相关实验 (${result.experiments.length})**:`)
+        for (const e of result.experiments.slice(0, 3)) {
+          parts.push(`- ${e.name}: ${e.objective}`)
+        }
+      }
+      if (parts.length === 0) {
+        parts.push(`未找到与 "${topic}" 相关的物理知识。`)
+      }
+      return {
+        success: true,
+        message: parts.join('\n'),
+        data: {
+          topic,
+          formulaCount: result.formulas.length,
+          conceptCount: result.concepts.length,
+          experimentCount: result.experiments.length,
+          formulas: result.formulas.map((f) => ({ name: f.name, formula: f.formula, description: f.description })),
+          concepts: result.concepts.map((c) => ({ name: c.name, description: c.description })),
+          experiments: result.experiments.map((e) => ({ name: e.name, objective: e.objective })),
+        },
+      }
+    }
+
+    case 'search_formulas': {
+      const query = typeof args.query === 'string' ? args.query : ''
+      if (!query) {
+        return { success: false, message: '请提供搜索关键词。' }
+      }
+      const formulas = physicsKnowledgeBase.searchFormulas(query)
+      if (formulas.length === 0) {
+        return {
+          success: true,
+          message: `未找到与 "${query}" 相关的公式。`,
+          data: { query, formulas: [] },
+        }
+      }
+      const parts = formulas.map(
+        (f) => `- **${f.name}**: \`${f.formula}\`  \n  ${f.description}\n  变量: ${Object.entries(f.variables).map(([k, v]) => `\`${k}\` = ${v}`).join('，')}`
+      )
+      return {
+        success: true,
+        message: `找到 ${formulas.length} 个相关公式：\n\n${parts.join('\n\n')}`,
+        data: {
+          query,
+          count: formulas.length,
+          formulas: formulas.map((f) => ({ name: f.name, formula: f.formula, description: f.description, category: f.category })),
+        },
+      }
+    }
+
+    case 'search_concepts': {
+      const query = typeof args.query === 'string' ? args.query : ''
+      if (!query) {
+        return { success: false, message: '请提供搜索关键词。' }
+      }
+      const concepts = physicsKnowledgeBase.searchConcepts(query)
+      if (concepts.length === 0) {
+        return {
+          success: true,
+          message: `未找到与 "${query}" 相关的物理概念。`,
+          data: { query, concepts: [] },
+        }
+      }
+      const parts = concepts.map((c) => {
+        const keyPoints = c.keyPoints.map((kp) => `  - ${kp}`).join('\n')
+        const misconceptions = c.commonMisconceptions.length > 0
+          ? `\n  常见误解:\n${c.commonMisconceptions.map((m) => `  - ${m}`).join('\n')}`
+          : ''
+        return `- **${c.name}**: ${c.description}\n  关键点:\n${keyPoints}${misconceptions}`
+      })
+      return {
+        success: true,
+        message: `找到 ${concepts.length} 个相关概念：\n\n${parts.join('\n\n')}`,
+        data: {
+          query,
+          count: concepts.length,
+          concepts: concepts.map((c) => ({
+            name: c.name,
+            description: c.description,
+            keyPoints: c.keyPoints,
+            commonMisconceptions: c.commonMisconceptions,
+          })),
         },
       }
     }

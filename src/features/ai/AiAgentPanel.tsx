@@ -4,7 +4,6 @@ import { useShallow } from 'zustand/shallow'
 import {
   Bot,
   Send,
-  Sparkles,
   Settings,
   Loader2,
   Wrench,
@@ -14,6 +13,11 @@ import {
   AlertCircle,
   Cpu,
   Square,
+  Plus,
+  MessageSquare,
+  Download,
+  Trash2,
+  Edit3,
 } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useI18n } from '@/shared/hooks/useI18n'
@@ -32,6 +36,10 @@ import type { AiConfig } from './aiConfigTypes'
 import type { AgentToolContext } from './agentTools'
 import { getFriendlyName } from '@/features/sandbox/friendlyName'
 import { saveScene } from '@/features/cloud/cloudApi'
+import { aiMemory } from './aiMemory'
+import { trimMessages } from './tokenBudget'
+import { conversationManager, type Conversation } from './conversationManager'
+import { exportConversationToMarkdown, downloadConversation } from './exportConversation'
 
 interface ToolCallState {
   id: string
@@ -119,9 +127,9 @@ const MessageComponent = React.memo(function MessageComponent({
                       <Loader2 className="h-3 w-3 animate-spin text-accent" />
                     )}
                     {call.status === 'success' && (
-                      <span className="text-green-500">✓</span>
+                      <span className="text-green-500">&#10003;</span>
                     )}
-                    {call.status === 'error' && <span className="text-danger">✗</span>}
+                    {call.status === 'error' && <span className="text-danger">&#10007;</span>}
                   </span>
                   {expanded ? (
                     <ChevronUp className="h-3 w-3 text-text-tertiary" />
@@ -191,39 +199,44 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
 
   const measurementData = useSyncExternalStore(subscribeMeasurementData, getMeasurementData)
 
-  const STORAGE_KEY = 'phyverse-ai-chat'
-  const MAX_MESSAGES = 200
+  // Conversation management state
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeConvId, setActiveConvId] = useState<string | null>(null)
+  const [showConvList, setShowConvList] = useState(false)
+  const [editingConvId, setEditingConvId] = useState<string | null>(null)
+  const [editingConvName, setEditingConvName] = useState('')
 
-  function loadMessages(): Message[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return []
-      const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return []
-      return parsed.slice(-MAX_MESSAGES)
-    } catch {
-      return []
+  // Load messages from active conversation
+  const loadConversationMessages = useCallback((): Message[] => {
+    const conv = conversationManager.getActive()
+    if (!conv || conv.messages.length === 0) return []
+    return conv.messages.map((m) => ({
+      id: `h-${m.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
+      role: m.role as Message['role'],
+      content: m.content,
+    }))
+  }, [])
+
+  const refreshConversations = useCallback(() => {
+    setConversations(conversationManager.getAll())
+    setActiveConvId(conversationManager.getActiveId())
+  }, [])
+
+  // Persist a message to conversationManager
+  const persistMessage = useCallback((role: string, content: string) => {
+    conversationManager.addMessage(role, content)
+  }, [])
+
+  // Initialize conversations
+  useEffect(() => {
+    const convs = conversationManager.getAll()
+    if (convs.length === 0) {
+      conversationManager.create()
     }
-  }
+    refreshConversations()
+  }, [refreshConversations])
 
-  function saveMessages(msgs: Message[]) {
-    try {
-      const trimmed = msgs.length > MAX_MESSAGES ? msgs.slice(-MAX_MESSAGES) : msgs
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
-    } catch {
-      // localStorage full or unavailable
-    }
-  }
-
-  function clearStoredMessages() {
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {
-      // ignore
-    }
-  }
-
-  const [messages, setMessages] = useState<Message[]>(loadMessages)
+  const [messages, setMessages] = useState<Message[]>(loadConversationMessages)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -233,17 +246,22 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   const abortRef = useRef<AbortController | null>(null)
   const streamedToolCallsRef = useRef<Record<number, ToolCallState>>({})
   const activeRequestIdRef = useRef<string | null>(null)
+  const rafIdRef = useRef<number | null>(null)
+  const pendingStreamUpdateRef = useRef<{
+    content: string
+    toolCalls: ToolCallState[]
+  } | null>(null)
+  const conversationRef = useRef<Array<{ role: string; content: string }>>([])
 
-  // Persist messages to localStorage on every change
-  useEffect(() => {
-    saveMessages(messages)
-  }, [messages])
-
-  // Abort any in-flight request when the panel unmounts (e.g. hidden or route change)
+  // Abort any in-flight request when the panel unmounts
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
       activeRequestIdRef.current = null
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
     }
   }, [])
 
@@ -257,6 +275,26 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Context awareness: record scene snapshots on significant changes
+  const prevItemCountRef = useRef(items.length)
+  const prevRunningRef = useRef(isRunning)
+  useEffect(() => {
+    if (!user) return
+    const sessionId = activeConvId || 'default'
+
+    if (Math.abs(items.length - prevItemCountRef.current) >= 2) {
+      aiMemory.addSceneSnapshot(user.id, sessionId, items.length, gravity)
+      prevItemCountRef.current = items.length
+    }
+
+    if (isRunning !== prevRunningRef.current) {
+      if (isRunning) {
+        aiMemory.addMessage(user.id, sessionId, 'system', `模拟开始运行，${items.length} 个物体`)
+      }
+      prevRunningRef.current = isRunning
+    }
+  }, [items.length, isRunning, gravity, user, activeConvId])
 
   const toolContext: AgentToolContext = useMemo(
     () => ({
@@ -309,7 +347,27 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       const objectCount = items.length
       const dynamicCount = items.filter(it => it.isDynamic).length
       const staticCount = objectCount - dynamicCount
-      
+
+      // Build memory context
+      const memoryContext = (() => {
+        if (!user) return ''
+        const sessionId = activeConvId || 'default'
+        const ctx = aiMemory.getRelevantContext(user.id, sessionId, 10)
+        const parts: string[] = []
+
+        if (ctx.preferredTools.length > 0) {
+          parts.push(`- 常用工具: ${ctx.preferredTools.slice(-5).join(', ')}`)
+        }
+        if (ctx.successfulExperiments.length > 0) {
+          parts.push(`- 成功实验模式: ${ctx.successfulExperiments.join(', ')}`)
+        }
+        if (ctx.commonErrors.length > 0) {
+          parts.push(`- 需避免的错误:\n${ctx.commonErrors.map(e => `  · ${e.error} -> ${e.suggestedFix}`).join('\n')}`)
+        }
+
+        return parts.length > 0 ? `\n## 记忆上下文\n${parts.join('\n')}` : ''
+      })()
+
       return `你是 Phyverse AI Agent，一个专业的物理沙盒实验助手。你的职责是帮助用户搭建物理模型、进行实验、分析数据并理解物理概念。
 
 ## 当前场景状态
@@ -317,7 +375,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
 - 重力加速度: [${gravity.join(', ')}] m/s²
 - 时间缩放: ${timeScale}x
 - 选中物体: ${selectedName}
-- 模拟状态: ${isRunning ? '运行中' : '已暂停'}
+- 模拟状态: ${isRunning ? '运行中' : '已暂停'}${memoryContext}
 
 ## 可用工具
 你有 ${AGENT_TOOLS.length} 个工具可用，包括：
@@ -325,29 +383,25 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
 - 模拟控制: 运行、暂停、重置、设置时间缩放
 - 物理设置: 设置重力、施加冲量/力、设置材料属性
 - 测量分析: 获取场景信息、测量摘要、能量分析、距离/角度测量
+- 知识查询: 查询物理公式、概念、实验方案 (query_physics_knowledge, search_formulas, search_concepts)
 - 高级功能: 场景优化、运动预测、物理分析、代码导出
 
 ## 指导原则
-1. **教育性**: 逐步引导用户理解物理概念，提供清晰的解释
+1. **教育性**: 逐步引导用户理解物理概念，优先使用知识库工具查询准确的物理知识
 2. **安全性**: 避免创建可能导致模拟崩溃的场景（如过多物体、极端参数）
-3. **准确性**: 确保物理设置符合实际物理定律
+3. **准确性**: 确保物理设置符合实际物理定律，使用知识库验证公式和概念
 4. **实用性**: 优先使用最简洁有效的方法完成任务
 5. **容错性**: 当工具执行失败时，提供替代方案或解释原因
+6. **记忆利用**: 参考记忆上下文中的成功实验模式和常见错误，避免重复错误
 
 ## 错误处理
 - 如果物体未找到，检查名称是否正确或使用 ID
 - 如果参数无效，提供合理的默认值或建议范围
 - 如果操作失败，解释原因并提供恢复建议
 
-## 物理知识
-- 能量守恒: 在理想情况下，总能量 = 动能 + 势能
-- 摩擦力: 影响物体运动，可通过摩擦系数调节
-- 弹性碰撞: 通过弹性系数控制碰撞后的能量损失
-- 重力: 默认为 -9.81 m/s²，可根据实验需求调整
-
 请用中文回答，保持专业、友好、教育性的语气。`
     },
-    [timeScale, selectedId, items, gravity, isRunning]
+    [timeScale, selectedId, items, gravity, isRunning, user, activeConvId]
   )
 
   const parseStreamChunk = (
@@ -398,7 +452,6 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           }
         }
       } catch (parseErr) {
-        // Log malformed lines but don't fail the entire stream
         const errMsg = parseErr instanceof Error ? parseErr.message : String(parseErr)
         if (data.length > 0 && data !== '[DONE]') {
           errors.push(`Failed to parse stream chunk: ${errMsg.slice(0, 100)}`)
@@ -413,11 +466,11 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     async (toolCalls: ToolCallState[]) => {
       const results: Array<{ tool_call_id: string; role: 'tool'; content: string; name: string }> =
         []
+      const maxRetries = 1
       
       for (const call of toolCalls) {
         let args: Record<string, unknown> = {}
         
-        // Parse arguments with better error handling
         try {
           if (!call.arguments || call.arguments.trim() === '') {
             args = {}
@@ -438,45 +491,91 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           continue
         }
         
-        // Execute tool with error handling
-        try {
-          const result = await executeTool(call.name, args, toolContext)
-          call.status = result.success ? 'success' : 'error'
-          call.result = result.message
-          results.push({
-            tool_call_id: call.id,
-            role: 'tool',
-            content: result.message,
-            name: call.name,
-          })
-          
-          // Log errors for debugging
-          if (!result.success) {
-            console.error(`[AiAgentPanel] Tool execution failed for ${call.name}:`, result.message)
+        // Execute tool with retry
+        let lastError = ''
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const result = await executeTool(call.name, args, toolContext)
+            call.status = result.success ? 'success' : 'error'
+            call.result = result.message
+            
+            // Record tool usage in memory
+            if (user) {
+              const sessionId = activeConvId || 'default'
+              aiMemory.recordToolUsage(user.id, sessionId, call.name)
+              if (!result.success) {
+                aiMemory.recordError(user.id, sessionId, result.message, `检查 ${call.name} 的参数是否正确`)
+              }
+            }
+            
+            results.push({
+              tool_call_id: call.id,
+              role: 'tool',
+              content: result.message,
+              name: call.name,
+            })
+            
+            if (!result.success) {
+              console.error(`[AiAgentPanel] Tool execution failed for ${call.name}:`, result.message)
+            }
+            break
+          } catch (execErr) {
+            lastError = execErr instanceof Error ? execErr.message : String(execErr)
+            
+            if (attempt < maxRetries) {
+              console.warn(`[AiAgentPanel] Retrying tool ${call.name} (attempt ${attempt + 1}):`, lastError)
+              await new Promise((r) => setTimeout(r, 500))
+              continue
+            }
+            
+            call.status = 'error'
+            call.result = `工具执行异常(已重试${maxRetries}次): ${lastError.slice(0, 100)}`
+            results.push({
+              tool_call_id: call.id,
+              role: 'tool',
+              content: call.result,
+              name: call.name,
+            })
+            console.error(`[AiAgentPanel] Tool execution exception for ${call.name}:`, execErr)
+            
+            if (user) {
+              const sessionId = activeConvId || 'default'
+              aiMemory.recordError(user.id, sessionId, lastError, `重试 ${call.name} 工具`)
+            }
           }
-        } catch (execErr) {
-          const errMsg = execErr instanceof Error ? execErr.message : String(execErr)
-          call.status = 'error'
-          call.result = `工具执行异常: ${errMsg.slice(0, 100)}`
-          results.push({
-            tool_call_id: call.id,
-            role: 'tool',
-            content: call.result,
-            name: call.name,
-          })
-          console.error(`[AiAgentPanel] Tool execution exception for ${call.name}:`, execErr)
         }
       }
       
       return results
     },
-    [toolContext]
+    [toolContext, user, activeConvId]
   )
+
+  // Streaming throttle helper
+  const flushStreamUpdate = useCallback(() => {
+    if (pendingStreamUpdateRef.current) {
+      const { content, toolCalls: newToolCalls } = pendingStreamUpdateRef.current
+      pendingStreamUpdateRef.current = null
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (!last || last.role !== 'assistant') return prev
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...last,
+            content,
+            toolCalls: newToolCalls.length > 0 ? newToolCalls : last.toolCalls,
+          },
+        ]
+      })
+    }
+    rafIdRef.current = null
+  }, [])
 
   const followUpWithToolResults = useCallback(
     async (
       currentMessages: Message[],
-      originalConversation: { role: string; content: string }[],
+      originalConversation: Array<{ role: string; content: string }>,
       toolCalls: ToolCallState[],
       toolResults: Array<{ tool_call_id: string; role: string; content: string; name: string }>
     ) => {
@@ -543,21 +642,18 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             streamErrors.push(...errors)
           }
 
-          setMessages((prev) => {
-            const last = prev[prev.length - 1]
-            if (!last || last.id !== followUpAssistant.id) return prev
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                content,
-                toolCalls: newToolCalls.length > 0 ? newToolCalls : last.toolCalls,
-              },
-            ]
-          })
+          pendingStreamUpdateRef.current = { content, toolCalls: newToolCalls }
+          if (rafIdRef.current === null) {
+            rafIdRef.current = requestAnimationFrame(flushStreamUpdate)
+          }
         }
         
-        // Log any stream parsing errors that occurred
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current)
+          rafIdRef.current = null
+        }
+        flushStreamUpdate()
+        
         if (streamErrors.length > 0) {
           console.warn('[AiAgentPanel] Stream parsing errors:', streamErrors.slice(0, 5))
         }
@@ -582,7 +678,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         setError(raw.includes('Invalid JSON') ? 'AI 生成格式出错，请重试' : raw.slice(0, 120))
       }
     },
-    [config]
+    [config, flushStreamUpdate]
   )
 
   const handleSend = useCallback(async () => {
@@ -592,7 +688,6 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       return
     }
 
-    // Prevent concurrent requests
     if (activeRequestIdRef.current) {
       console.warn('[AiAgentPanel] Request already in progress, ignoring new request')
       return
@@ -619,11 +714,22 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     setError(null)
     streamedToolCallsRef.current = {}
 
-    const conversation = [
+    // Persist user message
+    persistMessage('user', userMessage.content)
+    if (user) {
+      const sessionId = activeConvId || 'default'
+      aiMemory.addMessage(user.id, sessionId, 'user', userMessage.content)
+    }
+
+    const fullConversation = [
       { role: 'system' as const, content: systemPrompt },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
       { role: 'user' as const, content: userMessage.content },
     ]
+
+    // Apply token budget trimming
+    const conversation = trimMessages(fullConversation)
+    conversationRef.current = conversation
 
     abortRef.current = new AbortController()
 
@@ -659,21 +765,20 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           streamErrors.push(...errors)
         }
 
-        setMessages((prev) => {
-          const last = prev[prev.length - 1]
-          if (!last || last.role !== 'assistant') return prev
-          return [
-            ...prev.slice(0, -1),
-            {
-              ...last,
-              content,
-              toolCalls: toolCalls.length > 0 ? toolCalls : last.toolCalls,
-            },
-          ]
-        })
+        // Throttle with rAF
+        pendingStreamUpdateRef.current = { content, toolCalls }
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushStreamUpdate)
+        }
       }
       
-      // Log any stream parsing errors that occurred
+      // Flush final pending update
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+      flushStreamUpdate()
+      
       if (streamErrors.length > 0) {
         console.warn('[AiAgentPanel] Stream parsing errors:', streamErrors.slice(0, 5))
       }
@@ -685,7 +790,17 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         const finalToolCalls = streamedToolCallsRef.current
           ? Object.values(streamedToolCallsRef.current)
           : (last.toolCalls ?? [])
+        const finalContent = last.content || ''
         const finalMessage = { ...last, isStreaming: false, toolCalls: finalToolCalls }
+
+        // Persist assistant message
+        if (finalContent) {
+          persistMessage('assistant', finalContent)
+          if (user) {
+            const sessionId = activeConvId || 'default'
+            aiMemory.addMessage(user.id, sessionId, 'assistant', finalContent)
+          }
+        }
 
         if (finalToolCalls.length > 0) {
           executeToolCalls(finalToolCalls).then((toolResults) => {
@@ -696,8 +811,7 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             }))
             setMessages((current) => {
               const updated = [...current, ...toolResultMessages]
-              // Re-engage AI with tool results for a natural follow-up
-              followUpWithToolResults(updated, conversation, finalToolCalls, toolResults)
+              followUpWithToolResults(updated, conversationRef.current, finalToolCalls, toolResults)
               return updated
             })
           })
@@ -706,7 +820,6 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
         return [...prev.slice(0, -1), finalMessage]
       })
     } catch (err) {
-      // Only handle error if this is still the active request
       if (activeRequestIdRef.current !== requestId) {
         console.warn('[AiAgentPanel] Ignoring error from stale request')
         return
@@ -758,6 +871,9 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
     messages,
     executeToolCalls,
     followUpWithToolResults,
+    persistMessage,
+    flushStreamUpdate,
+    activeConvId,
   ])
 
   const handleQuickAction = (prompt: string) => {
@@ -782,9 +898,14 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-soft">
-            <Sparkles className="h-4 w-4 text-accent" />
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowConvList((v) => !v)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-tertiary hover:bg-paper-secondary hover:text-text-primary transition-colors"
+            title="对话列表"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
           <div>
             <h3 className="font-heading text-sm font-semibold text-text-primary">
               {t('ai.agent.title')}
@@ -795,6 +916,22 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => {
+              const exportMsgs = messages
+                .filter((m) => m.role === 'user' || m.role === 'assistant')
+                .map((m) => ({ role: m.role, content: m.content, timestamp: Date.now() }))
+              const markdown = exportConversationToMarkdown(exportMsgs)
+              downloadConversation(markdown)
+            }}
+            disabled={messages.length === 0}
+            title="导出对话"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -810,7 +947,8 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
             className="h-7 w-7 p-0"
             onClick={() => {
               setMessages([])
-              clearStoredMessages()
+              conversationManager.clearActive()
+              refreshConversations()
             }}
             title={t('ai.agent.clear')}
           >
@@ -818,6 +956,119 @@ export function AiAgentPanel({ onOpenSettings }: AiAgentPanelProps) {
           </Button>
         </div>
       </div>
+
+      {/* Conversation list */}
+      <AnimatePresence>
+        {showConvList && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-b border-border"
+          >
+            <div className="max-h-48 overflow-y-auto px-2 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  conversationManager.create()
+                  setMessages([])
+                  refreshConversations()
+                  setShowConvList(false)
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-accent hover:bg-accent-soft transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                新建对话
+              </button>
+              <div className="my-1 border-t border-border" />
+              {conversations.map((conv) => (
+                <div
+                  key={conv.id}
+                  className={cn(
+                    'group flex items-center gap-2 rounded-lg px-3 py-2 transition-colors',
+                    conv.id === activeConvId
+                      ? 'bg-accent-soft text-accent'
+                      : 'text-text-secondary hover:bg-paper-secondary'
+                  )}
+                >
+                  {editingConvId === conv.id ? (
+                    <input
+                      type="text"
+                      value={editingConvName}
+                      onChange={(e) => setEditingConvName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          conversationManager.rename(conv.id, editingConvName)
+                          setEditingConvId(null)
+                          refreshConversations()
+                        } else if (e.key === 'Escape') {
+                          setEditingConvId(null)
+                        }
+                      }}
+                      onBlur={() => {
+                        if (editingConvName.trim()) {
+                          conversationManager.rename(conv.id, editingConvName)
+                        }
+                        setEditingConvId(null)
+                        refreshConversations()
+                      }}
+                      className="flex-1 rounded border border-border bg-paper px-2 py-0.5 text-xs text-text-primary focus:border-accent focus:outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        conversationManager.switchTo(conv.id)
+                        setMessages(loadConversationMessages())
+                        refreshConversations()
+                        setShowConvList(false)
+                      }}
+                      className="flex-1 truncate text-left text-xs"
+                    >
+                      {conv.name}
+                    </button>
+                  )}
+                  {conv.id === activeConvId && !editingConvId && (
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingConvId(conv.id)
+                          setEditingConvName(conv.name)
+                        }}
+                        className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+                        title="重命名"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (conversations.length <= 1) return
+                          conversationManager.delete(conv.id)
+                          setMessages(loadConversationMessages())
+                          refreshConversations()
+                        }}
+                        disabled={conversations.length <= 1}
+                        className="rounded p-0.5 text-text-tertiary hover:text-danger disabled:opacity-30"
+                        title="删除"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {conversations.length === 0 && (
+                <p className="px-3 py-2 text-[10px] text-text-tertiary text-center">暂无对话</p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3">

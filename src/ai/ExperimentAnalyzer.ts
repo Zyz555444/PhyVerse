@@ -1,3 +1,8 @@
+/**
+ * @deprecated ExperimentAnalyzer 已被 AiAgentPanel + agentTools 替代。
+ * 旧版基于规则匹配的场景分析器，功能已整合到 LLM 驱动的 Agent 工具系统中。
+ * 该文件将在后续版本中移除。
+ */
 import type { SandboxItem, SandboxJoint, TelemetrySample } from '@/features/sandbox/sandboxStore'
 
 export interface AIInsight {

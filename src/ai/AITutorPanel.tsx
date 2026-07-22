@@ -1,3 +1,8 @@
+/**
+ * @deprecated AITutorPanel 已被 AiAgentPanel 替代。
+ * 旧版基于规则匹配的 AI 助手，功能已整合到 LLM 驱动的 AiAgentPanel 中。
+ * 该文件将在后续版本中移除。
+ */
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Bot, X, Sparkles, RefreshCw, Send, ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/shallow'
